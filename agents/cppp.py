@@ -228,7 +228,7 @@ class CPPPAgent(BaseAgent):
         return {
             "portal_id":            "cppp",
             "portal_name":          "Central Public Procurement Portal (CPPP)",
-            "tender_id":            tender_id or title_raw[:80],
+            "tender_id":            tender_id or title[:80],
             "ref_number":           ref_num,
             "title":                title,
             "organisation":         row.get("organisation", ""),

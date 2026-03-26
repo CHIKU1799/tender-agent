@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tender Agent — Government Tender Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">
+      <span class="logo-icon">🏛️</span>
+      <span class="logo-text">Tender Agent</span>
+    </div>
+    <p class="logo-sub">AI-Powered Procurement Intelligence</p>
+  </div>
+
+  <!-- Scope selector -->
+  <div class="sidebar-section">
+    <h3 class="section-title">Data Scope</h3>
+    <div class="scope-group">
+      <label class="scope-option">
+        <input type="radio" name="scope" value="active" checked /> Active Tenders
+      </label>
+      <label class="scope-option">
+        <input type="radio" name="scope" value="archive" /> Archive / Past
+      </label>
+      <label class="scope-option">
+        <input type="radio" name="scope" value="awards" /> Awarded Contracts
+      </label>
+      <label class="scope-option">
+        <input type="radio" name="scope" value="both" /> Archive + Awards
+      </label>
+    </div>
+  </div>
+
+  <!-- Portal list -->
+  <div class="sidebar-section">
+    <h3 class="section-title">Portals</h3>
+    <div class="portal-actions">
+      <button class="btn-link" onclick="selectAll()">Select All</button>
+      <span class="divider">|</span>
+      <button class="btn-link" onclick="deselectAll()">None</button>
+    </div>
+    <div id="portal-list" class="portal-list">
+      <div class="loading-text">Loading portals…</div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="sidebar-section">
+    <h3 class="section-title">Filters</h3>
+    <label class="form-label">Max Pages</label>
+    <input type="number" id="max-pages" class="form-input" placeholder="All pages" min="1" />
+    <label class="form-label">Organisation</label>
+    <input type="text" id="org-filter" class="form-input" placeholder="Filter by org…" />
+    <label class="form-label checkbox-row">
+      <input type="checkbox" id="fetch-details" />
+      Fetch detail pages
+    </label>
+  </div>
+
+  <!-- Scrape button -->
+  <div class="sidebar-section">
+    <button id="scrape-btn" class="btn-primary" onclick="startScrape()">
+      ▶ Start Scraping
+    </button>
+    <div id="scrape-status" class="scrape-status"></div>
+  </div>
+</aside>
+
+<!-- ── Main content ────────────────────────────────────────────────────── -->
+<main class="main">
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <h1 class="page-title">Tenders</h1>
+      <span id="total-count" class="count-badge">0 records</span>
+    </div>
+    <div class="topbar-right">
+      <input type="text" id="search-input" class="search-box" placeholder="🔍  Search by title, org, tender ID…" oninput="debounceSearch()" />
+      <select id="status-filter" class="form-select" onchange="loadTenders(1)">
+        <option value="">All Statuses</option>
+        <option value="Active">Active</option>
+        <option value="Archive">Archive</option>
+        <option value="Awarded">Awarded</option>
+      </select>
+      <button class="btn-export" onclick="exportCSV()">⬇ CSV</button>
+      <button class="btn-export" onclick="exportJSON()">⬇ JSON</button>
+    </div>
+  </header>
+
+  <!-- Stats bar -->
+  <div id="stats-bar" class="stats-bar">
+    <div class="stat-card"><span class="stat-num" id="stat-total">—</span><span class="stat-label">Total</span></div>
+    <div class="stat-card"><span class="stat-num" id="stat-awarded">—</span><span class="stat-label">Awarded</span></div>
+    <div class="stat-card"><span class="stat-num" id="stat-portals">—</span><span class="stat-label">Portals</span></div>
+  </div>
+
+  <!-- Progress bar (hidden by default) -->
+  <div id="progress-wrap" class="progress-wrap hidden">
+    <div class="progress-label" id="progress-label">Scraping…</div>
+    <div class="progress-track">
+      <div id="progress-bar" class="progress-bar" style="width:0%"></div>
+    </div>
+    <div id="progress-log" class="progress-log"></div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <table class="tender-table" id="tender-table">
+      <thead>
+        <tr>
+          <th onclick="sortBy('portal_id')"    class="sortable">Portal <span class="sort-arrow"></span></th>
+          <th onclick="sortBy('title')"         class="sortable">Title <span class="sort-arrow"></span></th>
+          <th onclick="sortBy('organisation')"  class="sortable">Organisation <span class="sort-arrow"></span></th>
+          <th onclick="sortBy('published_date')" class="sortable">Published <span class="sort-arrow"></span></th>
+          <th onclick="sortBy('closing_date')"   class="sortable">Closing <span class="sort-arrow"></span></th>
+          <th onclick="sortBy('tender_value_inr')" class="sortable">Value (₹) <span class="sort-arrow"></span></th>
+          <th onclick="sortBy('status')"         class="sortable">Status <span class="sort-arrow"></span></th>
+          <th>Links</th>
+        </tr>
+      </thead>
+      <tbody id="tender-body">
+        <tr><td colspan="8" class="empty-msg">Run a scrape or load existing data to see tenders here.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <div class="pagination" id="pagination"></div>
+</main>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────
+let portals      = [];
+let currentPage  = 1;
+let totalPages   = 1;
+let sortCol      = 'scraped_at';
+let sortDir      = 'desc';
+let searchTimer  = null;
+let currentTask  = null;
+
+// ── Init ──────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadPortals();
+  loadTenders(1);
+  loadStats();
+});
+
+// ── Portal loading ────────────────────────────────────────────────────────
+async function loadPortals() {
+  const res  = await fetch('/api/portals');
+  portals    = await res.json();
+  const list = document.getElementById('portal-list');
+
+  const categories = [...new Set(portals.map(p => p.category))];
+  list.innerHTML = '';
+
+  for (const cat of categories) {
+    const group = document.createElement('div');
+    group.className = 'portal-group';
+    group.innerHTML = `<div class="portal-cat">${cat}</div>`;
+
+    portals.filter(p => p.category === cat).forEach(p => {
+      const item = document.createElement('label');
+      item.className = 'portal-item';
+      item.innerHTML = `
+        <input type="checkbox" value="${p.id}" checked />
+        <span class="portal-emoji">${p.emoji}</span>
+        <span class="portal-name">${p.name}</span>
+      `;
+      group.appendChild(item);
+    });
+    list.appendChild(group);
+  }
+}
+
+function selectAll()   { document.querySelectorAll('#portal-list input[type=checkbox]').forEach(c => c.checked = true);  }
+function deselectAll() { document.querySelectorAll('#portal-list input[type=checkbox]').forEach(c => c.checked = false); }
+
+// ── Scraping ──────────────────────────────────────────────────────────────
+async function startScrape() {
+  const selectedPortals = [...document.querySelectorAll('#portal-list input:checked')].map(c => c.value);
+  if (!selectedPortals.length) { alert('Select at least one portal.'); return; }
+
+  const scope    = document.querySelector('input[name=scope]:checked').value;
+  const maxPages = parseInt(document.getElementById('max-pages').value) || null;
+  const orgFilt  = document.getElementById('org-filter').value.trim() || null;
+  const details  = document.getElementById('fetch-details').checked;
+
+  const btn = document.getElementById('scrape-btn');
+  btn.disabled   = true;
+  btn.textContent = '⏳ Scraping…';
+
+  showProgress();
+
+  const res  = await fetch('/api/scrape', {
+    method:  'POST',
+    headers: {'Content-Type': 'application/json'},
+    body:    JSON.stringify({
+      portals: selectedPortals,
+      filters: { scope, max_pages: maxPages, org_filter: orgFilt, fetch_details: details },
+    }),
+  });
+  const { task_id } = await res.json();
+  currentTask = task_id;
+
+  streamProgress(task_id, selectedPortals.length);
+}
+
+function showProgress() {
+  document.getElementById('progress-wrap').classList.remove('hidden');
+  document.getElementById('progress-log').innerHTML = '';
+}
+
+function streamProgress(taskId, total) {
+  const src  = new EventSource(`/api/stream/${taskId}`);
+  let done   = 0;
+
+  src.onmessage = ev => {
+    const data = JSON.parse(ev.data);
+    const log  = document.getElementById('progress-log');
+    const bar  = document.getElementById('progress-bar');
+    const lbl  = document.getElementById('progress-label');
+
+    if (data.type === 'start') {
+      log.innerHTML += `<div class="log-item start">▶ ${data.name}</div>`;
+    } else if (data.type === 'progress') {
+      lbl.textContent = `Scraping ${data.portal_id} — page ${data.page} (${data.count} tenders)`;
+    } else if (data.type === 'complete') {
+      done++;
+      const pct = Math.round(done / total * 100);
+      bar.style.width = pct + '%';
+      const icon = data.errors && data.errors.length ? '⚠' : '✓';
+      log.innerHTML += `<div class="log-item ${icon === '✓' ? 'ok' : 'warn'}">${icon} ${data.portal_id}: ${data.count} tenders</div>`;
+      log.scrollTop = log.scrollHeight;
+    } else if (data.type === 'done') {
+      bar.style.width = '100%';
+      lbl.textContent = `Done — ${data.total} tenders scraped`;
+      src.close();
+      const btn = document.getElementById('scrape-btn');
+      btn.disabled    = false;
+      btn.textContent = '▶ Start Scraping';
+      setTimeout(() => { loadTenders(1); loadStats(); }, 500);
+    }
+  };
+
+  src.onerror = () => { src.close(); };
+}
+
+// ── Table ─────────────────────────────────────────────────────────────────
+async function loadTenders(page) {
+  currentPage   = page;
+  const search  = document.getElementById('search-input').value;
+  const status  = document.getElementById('status-filter').value;
+  const params  = new URLSearchParams({ page, per_page: 50, sort: sortCol, dir: sortDir });
+  if (search) params.set('search', search);
+  if (status) params.set('status', status);
+
+  const res  = await fetch(`/api/tenders?${params}`);
+  const data = await res.json();
+
+  document.getElementById('total-count').textContent = `${data.total.toLocaleString()} records`;
+  totalPages = data.pages;
+
+  renderTable(data.tenders);
+  renderPagination(data.total, data.pages);
+}
+
+function renderTable(rows) {
+  const tbody = document.getElementById('tender-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-msg">No tenders found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr class="row-${(r.status || 'active').toLowerCase()}">
+      <td><span class="portal-badge">${r.portal_id || ''}</span></td>
+      <td class="col-title" title="${esc(r.title)}">${esc(r.title || '—').substring(0, 80)}${r.title && r.title.length > 80 ? '…' : ''}</td>
+      <td class="col-org">${esc(r.organisation || '—')}</td>
+      <td class="col-date">${r.published_date || '—'}</td>
+      <td class="col-date">${r.closing_date   || '—'}</td>
+      <td class="col-value">${formatValue(r.tender_value_inr)}</td>
+      <td><span class="status-badge status-${(r.status||'active').toLowerCase()}">${r.status || 'Active'}</span></td>
+      <td class="col-links">
+        ${r.detail_url ? `<a href="${esc(r.detail_url)}" target="_blank" class="link-btn">View</a>` : ''}
+        ${r.award_winner ? `<span class="award-tag" title="Awarded to: ${esc(r.award_winner)}">🏆</span>` : ''}
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderPagination(total, pages) {
+  const p   = document.getElementById('pagination');
+  if (pages <= 1) { p.innerHTML = ''; return; }
+
+  let html = '';
+  if (currentPage > 1)  html += `<button onclick="loadTenders(${currentPage-1})">‹ Prev</button>`;
+  html += `<span class="page-info">Page ${currentPage} of ${pages}</span>`;
+  if (currentPage < pages) html += `<button onclick="loadTenders(${currentPage+1})">Next ›</button>`;
+  p.innerHTML = html;
+}
+
+function sortBy(col) {
+  if (sortCol === col) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
+  else { sortCol = col; sortDir = 'asc'; }
+  loadTenders(1);
+}
+
+function debounceSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => loadTenders(1), 350);
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────
+async function loadStats() {
+  const res  = await fetch('/api/stats');
+  const data = await res.json();
+  document.getElementById('stat-total').textContent   = data.total_tenders.toLocaleString();
+  document.getElementById('stat-awarded').textContent  = data.awarded.toLocaleString();
+  document.getElementById('stat-portals').textContent  = Object.keys(data.by_portal).length;
+}
+
+// ── Export ────────────────────────────────────────────────────────────────
+function exportCSV() {
+  window.location.href = '/api/export';
+}
+
+async function exportJSON() {
+  const res  = await fetch('/api/tenders?per_page=200&page=1');
+  const data = await res.json();
+  const blob = new Blob([JSON.stringify(data.tenders, null, 2)], {type: 'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'tenders.json'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatValue(v) {
+  if (!v) return '—';
+  const n = parseFloat(String(v).replace(/[^0-9.]/g,''));
+  if (isNaN(n)) return v;
+  if (n >= 1e7) return '₹' + (n/1e7).toFixed(2) + ' Cr';
+  if (n >= 1e5) return '₹' + (n/1e5).toFixed(2) + ' L';
+  return '₹' + n.toLocaleString('en-IN');
+}
+</script>
+</body>
+</html>

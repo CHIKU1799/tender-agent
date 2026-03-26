@@ -35,6 +35,10 @@ class PortalConfig:
     # GeM API fields
     api_base:         str  = ""
 
+    # Archive / awards URLs (GePNIC portals only)
+    archive_url:      str  = ""    # Past/closed tenders (requires CAPTCHA solve)
+    awards_url:       str  = ""    # Result of tenders / awarded contracts (requires CAPTCHA solve)
+
     # Display
     emoji:            str  = "🏛️"
     notes:            str  = ""     # Any known quirks
@@ -79,6 +83,8 @@ PORTALS: dict[str, PortalConfig] = {
         category     = "Central",
         session_seed_url = "https://defproc.gov.in/nicgep/app?page=FrontEndLatestActiveTenders&service=page",
         results_url  = "https://defproc.gov.in/nicgep/app?component=%24DirectLink&page=FrontEndAdvancedSearchResult&service=direct",
+        archive_url  = "https://defproc.gov.in/nicgep/app?page=FrontEndTendersInArchive&service=page",
+        awards_url   = "https://defproc.gov.in/nicgep/app?page=FrontEndResultOfTenders&service=page",
         emoji        = "🛡️",
         notes        = "MES, BRO, Navy, Air Force, Army tenders",
     ),
@@ -105,6 +111,8 @@ PORTALS: dict[str, PortalConfig] = {
         category     = "Central",
         session_seed_url = "https://etenders.gov.in/eprocure/app?page=FrontEndLatestActiveTenders&service=page",
         results_url  = "https://etenders.gov.in/eprocure/app?component=%24DirectLink&page=FrontEndAdvancedSearchResult&service=direct",
+        archive_url  = "https://etenders.gov.in/eprocure/app?page=FrontEndTendersInArchive&service=page",
+        awards_url   = "https://etenders.gov.in/eprocure/app?page=FrontEndResultOfTenders&service=page",
         emoji        = "🛣️",
         notes        = "Hosts NHAI, MoRTH, BSNL and other central org tenders",
     ),
@@ -118,6 +126,8 @@ PORTALS: dict[str, PortalConfig] = {
         category     = "PSU",
         session_seed_url = "https://eprocurentpc.nic.in/nicgep/app?page=FrontEndLatestActiveTenders&service=page",
         results_url  = "https://eprocurentpc.nic.in/nicgep/app?component=%24DirectLink&page=FrontEndAdvancedSearchResult&service=direct",
+        archive_url  = "https://eprocurentpc.nic.in/nicgep/app?page=FrontEndTendersInArchive&service=page",
+        awards_url   = "https://eprocurentpc.nic.in/nicgep/app?page=FrontEndResultOfTenders&service=page",
         emoji        = "⚡",
         notes        = "National Thermal Power Corporation",
     ),
@@ -144,6 +154,8 @@ PORTALS: dict[str, PortalConfig] = {
         category     = "PSU",
         session_seed_url = "https://coalindiatenders.nic.in/nicgep/app?page=FrontEndLatestActiveTenders&service=page",
         results_url  = "https://coalindiatenders.nic.in/nicgep/app?component=%24DirectLink&page=FrontEndAdvancedSearchResult&service=direct",
+        archive_url  = "https://coalindiatenders.nic.in/nicgep/app?page=FrontEndTendersInArchive&service=page",
+        awards_url   = "https://coalindiatenders.nic.in/nicgep/app?page=FrontEndResultOfTenders&service=page",
         emoji        = "⛏️",
         notes        = "Coal India Limited and subsidiaries",
     ),
@@ -187,6 +199,8 @@ PORTALS: dict[str, PortalConfig] = {
         category     = "State",
         session_seed_url = "https://eproc.karnataka.gov.in/eprocure/app?page=FrontEndLatestActiveTenders&service=page",
         results_url  = "https://eproc.karnataka.gov.in/eprocure/app?component=%24DirectLink&page=FrontEndAdvancedSearchResult&service=direct",
+        archive_url  = "https://eproc.karnataka.gov.in/eprocure/app?page=FrontEndTendersInArchive&service=page",
+        awards_url   = "https://eproc.karnataka.gov.in/eprocure/app?page=FrontEndResultOfTenders&service=page",
         emoji        = "🌿",
     ),
 
@@ -199,6 +213,8 @@ PORTALS: dict[str, PortalConfig] = {
         category     = "State",
         session_seed_url = "https://mahatenders.gov.in/nicgep/app?page=FrontEndLatestActiveTenders&service=page",
         results_url  = "https://mahatenders.gov.in/nicgep/app?component=%24DirectLink&page=FrontEndAdvancedSearchResult&service=direct",
+        archive_url  = "https://mahatenders.gov.in/nicgep/app?page=FrontEndTendersInArchive&service=page",
+        awards_url   = "https://mahatenders.gov.in/nicgep/app?page=FrontEndResultOfTenders&service=page",
         emoji        = "🦁",
     ),
 
@@ -211,6 +227,8 @@ PORTALS: dict[str, PortalConfig] = {
         category     = "State",
         session_seed_url = "https://etender.up.nic.in/nicgep/app?page=FrontEndLatestActiveTenders&service=page",
         results_url  = "https://etender.up.nic.in/nicgep/app?component=%24DirectLink&page=FrontEndAdvancedSearchResult&service=direct",
+        archive_url  = "https://etender.up.nic.in/nicgep/app?page=FrontEndTendersInArchive&service=page",
+        awards_url   = "https://etender.up.nic.in/nicgep/app?page=FrontEndResultOfTenders&service=page",
         emoji        = "🏰",
         notes        = "Also hosts Smart Cities and AMRUT/Jal Shakti tenders",
     ),
@@ -224,6 +242,8 @@ PORTALS: dict[str, PortalConfig] = {
         category     = "State",
         session_seed_url = "https://tntenders.gov.in/nicgep/app?page=FrontEndLatestActiveTenders&service=page",
         results_url  = "https://tntenders.gov.in/nicgep/app?component=%24DirectLink&page=FrontEndAdvancedSearchResult&service=direct",
+        archive_url  = "https://tntenders.gov.in/nicgep/app?page=FrontEndTendersInArchive&service=page",
+        awards_url   = "https://tntenders.gov.in/nicgep/app?page=FrontEndResultOfTenders&service=page",
         emoji        = "🌺",
     ),
 
@@ -236,6 +256,8 @@ PORTALS: dict[str, PortalConfig] = {
         category     = "State",
         session_seed_url = "https://nprocure.com/eprocure/app?page=FrontEndLatestActiveTenders&service=page",
         results_url  = "https://nprocure.com/eprocure/app?component=%24DirectLink&page=FrontEndAdvancedSearchResult&service=direct",
+        archive_url  = "https://nprocure.com/eprocure/app?page=FrontEndTendersInArchive&service=page",
+        awards_url   = "https://nprocure.com/eprocure/app?page=FrontEndResultOfTenders&service=page",
         emoji        = "💛",
         notes        = "Gujarat uses nprocure.com portal",
     ),
@@ -249,6 +271,8 @@ PORTALS: dict[str, PortalConfig] = {
         category     = "State",
         session_seed_url = "https://eproc.rajasthan.gov.in/nicgep/app?page=FrontEndLatestActiveTenders&service=page",
         results_url  = "https://eproc.rajasthan.gov.in/nicgep/app?component=%24DirectLink&page=FrontEndAdvancedSearchResult&service=direct",
+        archive_url  = "https://eproc.rajasthan.gov.in/nicgep/app?page=FrontEndTendersInArchive&service=page",
+        awards_url   = "https://eproc.rajasthan.gov.in/nicgep/app?page=FrontEndResultOfTenders&service=page",
         emoji        = "🏜️",
     ),
 
