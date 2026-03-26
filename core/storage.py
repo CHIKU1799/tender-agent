@@ -1,5 +1,6 @@
 """
-Output layer — CSV, JSON, SQLite exporters + snapshot store for daily diff.
+Storage layer — CSV, JSON, SQLite exporters + snapshot diff store.
+All formats share the same FULL_FIELDS schema so CSV always has every column.
 """
 from __future__ import annotations
 import csv
@@ -12,64 +13,113 @@ OUTPUT_DIR   = Path("output")
 SNAPSHOT_DIR = Path("output/snapshots")
 LOG_DIR      = Path("logs")
 
-CSV_FIELDS = [
-    "portal_id", "tender_id", "ref_number", "title", "organisation",
-    "published_date", "closing_date", "opening_date", "status",
-    "detail_url", "scraped_at", "page_num",
+# ── Complete field list — every tender row has ALL these columns ───────────────
+FULL_FIELDS = [
+    # ── Identity ──────────────────────────────────────────
+    "portal_id",
+    "portal_name",
+    "tender_id",
+    "ref_number",
+    # ── Listing fields ────────────────────────────────────
+    "title",
+    "organisation",
+    "published_date",
+    "closing_date",
+    "opening_date",
+    "status",
+    "detail_url",
+    "scraped_at",
+    "page_num",
+    # ── Detail fields (filled when fetch_details=True) ────
+    "detail_scraped",
+    "tender_value_inr",
+    "tender_fee_inr",
+    "emd_inr",
+    "emd_fee_type",
+    "tender_type",
+    "tender_category",
+    "product_category",
+    "form_of_contract",
+    "payment_mode",
+    "bid_submission_start",
+    "bid_submission_end",
+    "doc_download_start",
+    "doc_download_end",
+    "clarification_start",
+    "clarification_end",
+    "pre_bid_meeting",
+    "bid_validity",
+    "work_description",
+    "two_stage_bid",
+    "nda_allowed",
+    "location",
+    "pincode",
+    "contact",
+    "fee_payable_to",
+    "emd_payable_to",
+    "documents",
+    # ── GeM-specific extras ───────────────────────────────
+    "gem_category",
+    "gem_quantity",
+    "gem_consignee",
 ]
 
-DETAIL_FIELDS = CSV_FIELDS + [
-    "tender_value", "tender_fee", "emd", "tender_type", "tender_category",
-    "product_category", "form_of_contract", "payment_mode",
-    "bid_submission_start", "bid_submission_end",
-    "document_sale_start", "document_sale_end",
-    "location", "pincode", "contact", "documents",
-]
+
+def _normalise(tender: dict) -> dict:
+    """Ensure every field exists (empty string if missing)."""
+    return {f: str(tender.get(f, "") or "").strip() for f in FULL_FIELDS}
 
 
-# ─── CSV ─────────────────────────────────────────────────────────────────────
+# ─── CSV ──────────────────────────────────────────────────────────────────────
 
-def save_csv(tenders: list[dict], portal_id: str, output_dir: Path = OUTPUT_DIR):
+def save_csv(tenders: list[dict], portal_id: str, output_dir: Path = OUTPUT_DIR) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
-    path = output_dir / f"{portal_id}_tenders.csv"
+    path   = output_dir / f"{portal_id}_tenders.csv"
     is_new = not path.exists() or path.stat().st_size == 0
-    with open(path, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS, extrasaction="ignore")
+    rows   = [_normalise(t) for t in tenders]
+    with open(path, "a", newline="", encoding="utf-8-sig") as f:
+        # utf-8-sig adds BOM so Excel opens correctly
+        writer = csv.DictWriter(f, fieldnames=FULL_FIELDS, extrasaction="ignore")
         if is_new:
             writer.writeheader()
-        writer.writerows(tenders)
+        writer.writerows(rows)
     return path
 
 
-# ─── JSON ────────────────────────────────────────────────────────────────────
+def save_combined_csv(all_tenders: list[dict], output_dir: Path = OUTPUT_DIR) -> Path:
+    """Single CSV with all portals combined."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path   = output_dir / "all_tenders.csv"
+    rows   = [_normalise(t) for t in all_tenders]
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(f, fieldnames=FULL_FIELDS, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+    return path
 
-def save_json(tenders: list[dict], portal_id: str, output_dir: Path = OUTPUT_DIR):
+
+# ─── JSON ─────────────────────────────────────────────────────────────────────
+
+def save_json(tenders: list[dict], portal_id: str, output_dir: Path = OUTPUT_DIR) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / f"{portal_id}_tenders.json"
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(tenders, f, indent=2, ensure_ascii=False)
+        json.dump(tenders, f, indent=2, ensure_ascii=False, default=str)
     return path
 
 
-# ─── SQLite ──────────────────────────────────────────────────────────────────
+# ─── SQLite ───────────────────────────────────────────────────────────────────
 
 def _get_db(output_dir: Path = OUTPUT_DIR) -> sqlite3.Connection:
     output_dir.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(output_dir / "tenders.db")
-    conn.execute("""
+    cols = ", ".join(
+        f"{f} TEXT" if f != "page_num" else "page_num INTEGER"
+        for f in FULL_FIELDS
+    )
+    conn.execute(f"""
         CREATE TABLE IF NOT EXISTS tenders (
-            portal_id       TEXT NOT NULL,
-            tender_id       TEXT NOT NULL,
-            ref_number      TEXT,
-            title           TEXT,
-            organisation    TEXT,
-            published_date  TEXT,
-            closing_date    TEXT,
-            opening_date    TEXT,
-            status          TEXT,
-            detail_url      TEXT,
-            scraped_at      TEXT,
-            page_num        INTEGER,
+            {cols},
             PRIMARY KEY (portal_id, tender_id)
         )
     """)
@@ -81,23 +131,20 @@ def save_sqlite(tenders: list[dict], output_dir: Path = OUTPUT_DIR):
     if not tenders:
         return
     conn = _get_db(output_dir)
+    placeholders = ", ".join(["?"] * len(FULL_FIELDS))
     rows = [
-        (
-            t.get("portal_id", ""), t.get("tender_id", ""), t.get("ref_number", ""),
-            t.get("title", ""), t.get("organisation", ""), t.get("published_date", ""),
-            t.get("closing_date", ""), t.get("opening_date", ""), t.get("status", ""),
-            t.get("detail_url", ""), t.get("scraped_at", ""), t.get("page_num", 0),
-        )
+        tuple(_normalise(t).get(f, "") for f in FULL_FIELDS)
         for t in tenders
     ]
-    conn.executemany("""
-        INSERT OR REPLACE INTO tenders VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-    """, rows)
+    conn.executemany(
+        f"INSERT OR REPLACE INTO tenders VALUES ({placeholders})",
+        rows,
+    )
     conn.commit()
     conn.close()
 
 
-# ─── Snapshot / Daily Diff ───────────────────────────────────────────────────
+# ─── Snapshot / Daily Diff ────────────────────────────────────────────────────
 
 class SnapshotStore:
     def __init__(self, base_dir: Path = SNAPSHOT_DIR):
@@ -116,7 +163,8 @@ class SnapshotStore:
     def save(self, portal_id: str, tenders: list[dict]):
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self._path(portal_id).write_text(
-            json.dumps(tenders, indent=2, ensure_ascii=False), encoding="utf-8"
+            json.dumps(tenders, indent=2, ensure_ascii=False, default=str),
+            encoding="utf-8",
         )
 
     def diff(self, portal_id: str, new_tenders: list[dict]) -> list[dict]:
@@ -127,15 +175,15 @@ class SnapshotStore:
         ]
 
 
-# ─── Run log ─────────────────────────────────────────────────────────────────
+# ─── Run log ──────────────────────────────────────────────────────────────────
 
 def write_run_log(entries: list[dict]):
     LOG_DIR.mkdir(exist_ok=True)
     path = LOG_DIR / "run_log.txt"
-    ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    ts   = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     with open(path, "a", encoding="utf-8") as f:
         for e in entries:
             f.write(
-                f"[{ts}] portal={e['portal_id']} "
-                f"total={e['total']} new={e['new']} pages={e['pages']}\n"
+                f"[{ts}] portal={e['portal_id']:15} "
+                f"total={e['total']:5} new={e['new']:5} pages={e['pages']}\n"
             )

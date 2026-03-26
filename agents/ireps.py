@@ -1,7 +1,6 @@
 """
 IREPS Agent — Indian Railways e-Procurement System (ireps.gov.in)
-Platform: Apache Struts 2 / custom Java web app
-Strategy: Playwright — navigate public tender search, extract table
+Platform: Apache Struts 2 / custom Java — public tender search page.
 """
 from __future__ import annotations
 import logging
@@ -12,35 +11,50 @@ from portals.configs import PortalConfig
 
 log = logging.getLogger("ireps")
 
+# Public search page — no login needed
 SEARCH_URL = "https://www.ireps.gov.in/ireps/tender/tenderSearchPublic.action"
 
 EXTRACT_JS = """() => {
-    const rows = document.querySelectorAll('table.dataTable tbody tr, table#tenderList tbody tr');
-    return Array.from(rows).map(row => {
+    // IREPS uses a standard HTML table
+    const table = document.querySelector('table.list, table#tenderList, table.dataTable, .tenderTable');
+    if (!table) {
+        // Fallback: find biggest table
+        const tables = Array.from(document.querySelectorAll('table'));
+        let best = null, max = 0;
+        for (const t of tables) {
+            const n = t.querySelectorAll('tr').length;
+            if (n > max) { max = n; best = t; }
+        }
+        if (!best || max < 3) return [];
+        const rows = Array.from(best.querySelectorAll('tr')).slice(1);
+        return rows.map(row => {
+            const cells = Array.from(row.querySelectorAll('td'));
+            const link  = row.querySelector('a');
+            return {
+                cells:      cells.map(c => c.innerText.trim()),
+                detail_href: link ? link.href : ''
+            };
+        }).filter(r => r.cells.some(c => c));
+    }
+    const rows = Array.from(table.querySelectorAll('tbody tr, tr')).slice(1);
+    return rows.map(row => {
         const cells = Array.from(row.querySelectorAll('td'));
-        const link = row.querySelector('a');
+        const link  = row.querySelector('a');
         return {
-            tender_id:      cells[0]?.innerText.trim() || '',
-            title:          cells[1]?.innerText.trim() || '',
-            organisation:   cells[2]?.innerText.trim() || '',
-            published_date: cells[3]?.innerText.trim() || '',
-            closing_date:   cells[4]?.innerText.trim() || '',
-            detail_href:    link ? link.href : '',
+            cells:       cells.map(c => c.innerText.trim()),
+            detail_href: link ? link.href : ''
         };
-    }).filter(r => r.tender_id || r.title);
+    }).filter(r => r.cells.some(c => c));
 }"""
 
-PAGINATION_JS = """() => {
-    const next = document.querySelector('a.next, a[title="Next"], input[value="Next"]');
-    const info = document.querySelector('#tenderList_info, .dataTables_info');
-    return {
-        hasNext: !!next,
-        infoText: info ? info.innerText.trim() : null,
-    };
+NEXT_JS = """() => {
+    const n = document.querySelector('a.next, a[title="Next Page"], a[title="Next"], input[value="Next >"]');
+    return n ? n.outerHTML : null;
 }"""
 
 
 class IREPSAgent(BaseAgent):
+
     def __init__(self, config: PortalConfig, session: BrowserSession):
         super().__init__(config)
         self.session = session
@@ -49,25 +63,30 @@ class IREPSAgent(BaseAgent):
         self,
         max_pages: int | None = None,
         org_filter: str | None = None,
+        fetch_details: bool = False,
         progress_cb=None,
     ) -> ScrapeResult:
 
         result = ScrapeResult(portal_id="ireps")
-        ctx = await self.session.new_context()
+        ctx  = await self.session.new_context()
         page = await self.session.new_page(ctx)
 
         try:
-            log.info("[ireps] Loading public tender search...")
+            log.info("[ireps] Loading public search page...")
             await page.goto(SEARCH_URL, wait_until="networkidle", timeout=60_000)
             await page.wait_for_timeout(2000)
 
-            # Try clicking "Search" with default (empty) params
-            search_btn = await page.query_selector(
-                'input[type="submit"][value*="Search"], button:text("Search")'
-            )
-            if search_btn:
-                await search_btn.click()
-                await page.wait_for_timeout(3000)
+            # Try submitting the blank search form
+            for sel in ['input[type="submit"]', 'button[type="submit"]', 'input[value*="Search"]']:
+                btn = await page.query_selector(sel)
+                if btn:
+                    try:
+                        async with page.expect_navigation(wait_until="networkidle", timeout=30_000):
+                            await btn.click()
+                        await page.wait_for_timeout(2000)
+                        break
+                    except Exception:
+                        pass
 
             current_page = 1
             while True:
@@ -76,7 +95,8 @@ class IREPSAgent(BaseAgent):
 
                 rows = await page.evaluate(EXTRACT_JS)
                 if not rows:
-                    log.warning(f"[ireps] Page {current_page}: no rows found")
+                    log.warning(f"[ireps] Page {current_page}: no rows — trying screenshot")
+                    await page.screenshot(path="screenshots/ireps_debug.png")
                     break
 
                 tenders = [self._parse_row(r, current_page) for r in rows]
@@ -85,26 +105,31 @@ class IREPSAgent(BaseAgent):
 
                 result.tenders.extend(tenders)
                 result.pages = current_page
-
                 log.info(f"[ireps] Page {current_page} — {len(tenders)} tenders (total: {len(result.tenders)})")
+
                 if progress_cb:
                     await progress_cb(current_page, len(result.tenders))
 
-                pagination = await page.evaluate(PAGINATION_JS)
-                if not pagination["hasNext"]:
+                next_html = await page.evaluate(NEXT_JS)
+                if not next_html:
                     break
 
                 await random_delay()
                 try:
                     async with page.expect_navigation(wait_until="networkidle", timeout=30_000):
-                        await page.click('a.next, a[title="Next"]')
+                        await page.evaluate("""() => {
+                            const n = document.querySelector('a.next, a[title="Next Page"], a[title="Next"]');
+                            if (n) n.click();
+                        }""")
                     current_page += 1
+                    await page.wait_for_timeout(1500)
                 except Exception as e:
-                    log.warning(f"[ireps] Navigation failed: {e}")
+                    log.warning(f"[ireps] Pagination failed: {e}")
                     break
 
         except Exception as e:
             log.error(f"[ireps] Error: {e}")
+            await page.screenshot(path="screenshots/ireps_error.png")
             result.errors.append(str(e))
         finally:
             await ctx.close()
@@ -112,17 +137,37 @@ class IREPSAgent(BaseAgent):
         return result
 
     def _parse_row(self, row: dict, page_num: int) -> dict:
+        cells = row.get("cells", [])
+        def cell(i): return cells[i].strip() if i < len(cells) else ""
         return {
-            "portal_id":      "ireps",
-            "tender_id":      row.get("tender_id", ""),
-            "ref_number":     row.get("tender_id", ""),
-            "title":          row.get("title", ""),
-            "organisation":   row.get("organisation", ""),
-            "published_date": row.get("published_date", ""),
-            "closing_date":   row.get("closing_date", ""),
-            "opening_date":   "",
-            "status":         "Active",
-            "detail_url":     row.get("detail_href", ""),
-            "scraped_at":     now_iso(),
-            "page_num":       page_num,
+            "portal_id":            "ireps",
+            "portal_name":          "Indian Railways e-Procurement (IREPS)",
+            "tender_id":            cell(0),
+            "ref_number":           cell(0),
+            "title":                cell(1),
+            "organisation":         cell(2),
+            "published_date":       cell(3),
+            "closing_date":         cell(4),
+            "opening_date":         cell(5) if len(cells) > 5 else "",
+            "status":               "Active",
+            "detail_url":           row.get("detail_href", ""),
+            "scraped_at":           now_iso(),
+            "page_num":             page_num,
+            "detail_scraped":       False,
+            "tender_value_inr":     "",
+            "tender_fee_inr":       "",
+            "emd_inr":              "",
+            "tender_type":          "",
+            "tender_category":      "",
+            "product_category":     "",
+            "form_of_contract":     "",
+            "payment_mode":         "",
+            "bid_submission_start": "",
+            "bid_submission_end":   "",
+            "doc_download_start":   "",
+            "doc_download_end":     "",
+            "location":             "",
+            "pincode":              "",
+            "contact":              "",
+            "documents":            "",
         }
