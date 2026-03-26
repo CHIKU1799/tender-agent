@@ -1,0 +1,9 @@
+output/
+logs/
+screenshots/
+__pycache__/
+*.pyc
+*.db
+.env
+*.egg-info/
+.DS_Store
