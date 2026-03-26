@@ -62,13 +62,12 @@ PORTALS: dict[str, PortalConfig] = {
     "cppp": PortalConfig(
         portal_id    = "cppp",
         display_name = "Central Public Procurement Portal (CPPP)",
-        base_url     = "https://eprocure.gov.in/eprocure/app",
-        platform     = "gepnic",
+        base_url     = "https://eprocure.gov.in/cppp",
+        platform     = "cppp",
         category     = "Central",
-        session_seed_url = "https://eprocure.gov.in/eprocure/app?page=FrontEndLatestActiveTenders&service=page",
-        results_url  = "https://eprocure.gov.in/eprocure/app?component=%24DirectLink&page=FrontEndAdvancedSearchResult&service=direct",
+        results_url  = "https://eprocure.gov.in/cppp/latestactivetendersnew/cpppdata",
         emoji        = "🏛️",
-        notes        = "Largest central govt portal — thousands of tenders",
+        notes        = "Cross-ministry aggregator — no CAPTCHA, paginated, ~10 tenders/page",
     ),
 
     # ── Ministry of Defence ───────────────────────────────────────────────────

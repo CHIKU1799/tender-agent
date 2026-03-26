@@ -240,6 +240,15 @@ class GePNICAgent(BaseAgent):
             "two_stage_bid":          get("Two Stage Bidding Allowed"),
             "nda_allowed":            get("NDA Allowed"),
             "documents":              " | ".join(data.get("docs", [])),
+            # Award fields — populated only if tender has been awarded
+            "award_winner":           get("Award To", "Successful Bidder", "Vendor Name",
+                                          "L1 Bidder", "Awarded To"),
+            "award_date":             get("Award of Contract Date", "AOC Date",
+                                          "Date of Award", "Contract Award Date"),
+            "award_amount":           get("Award Amount", "Contract Value",
+                                          "Award Value", "Contract Amount"),
+            "aoc_no":                 get("AOC No.", "AOC Reference No.",
+                                          "Award Reference", "Contract No."),
         }
 
     # ── Navigation helpers ─────────────────────────────────────────────────────

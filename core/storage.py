@@ -62,6 +62,19 @@ FULL_FIELDS = [
     "gem_category",
     "gem_quantity",
     "gem_consignee",
+    # ── Award / Result of Tender (filled when tender is awarded) ──
+    "award_winner",     # Winning vendor / contractor name
+    "award_date",       # Award of Contract (AOC) date
+    "award_amount",     # Contract value awarded
+    "aoc_no",           # AOC reference number
+]
+
+# Fields to include in the awards-only CSV (subset of FULL_FIELDS)
+AWARD_FIELDS = [
+    "portal_id", "portal_name", "tender_id", "ref_number",
+    "title", "organisation", "published_date", "closing_date",
+    "tender_value_inr", "detail_url", "scraped_at",
+    "award_winner", "award_date", "award_amount", "aoc_no",
 ]
 
 
@@ -95,6 +108,28 @@ def save_combined_csv(all_tenders: list[dict], output_dir: Path = OUTPUT_DIR) ->
         writer = csv.DictWriter(f, fieldnames=FULL_FIELDS, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
+    return path
+
+
+def save_awards_csv(tenders: list[dict], output_dir: Path = OUTPUT_DIR) -> Path:
+    """
+    Save only tenders that have award data (winner/AOC info) to a separate CSV.
+    Returns path. Returns None if no awarded tenders found.
+    """
+    awarded = [t for t in tenders if t.get("award_winner") or t.get("award_date")]
+    if not awarded:
+        return None
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / "awarded_tenders.csv"
+
+    def norm_award(t):
+        return {f: str(t.get(f, "") or "").strip() for f in AWARD_FIELDS}
+
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(f, fieldnames=AWARD_FIELDS, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows([norm_award(t) for t in awarded])
     return path
 
 

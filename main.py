@@ -15,11 +15,12 @@ from agents.gepnic  import GePNICAgent
 from agents.gem     import GeMAgent
 from agents.ireps   import IREPSAgent
 from agents.generic import GenericAgent
+from agents.cppp    import CPPPAgent
 from agents.base    import ScrapeResult
 from core.browser   import BrowserSession
 from core.storage   import (
     SnapshotStore, save_csv, save_json, save_sqlite,
-    save_combined_csv, write_run_log, OUTPUT_DIR,
+    save_combined_csv, save_awards_csv, write_run_log, OUTPUT_DIR,
 )
 from interface.cli  import (
     console, build_progress,
@@ -45,6 +46,7 @@ def make_agent(portal_id: str, session: BrowserSession):
     if   cfg.platform == "gepnic":  return GePNICAgent(cfg, session)
     elif cfg.platform == "gem_api": return GeMAgent(cfg, session)
     elif cfg.platform == "ireps":   return IREPSAgent(cfg, session)
+    elif cfg.platform == "cppp":    return CPPPAgent(cfg, session)
     else:                           return GenericAgent(cfg, session)
 
 
@@ -144,6 +146,12 @@ def save_all(
     if all_tenders and "csv" in fmts:
         combined_path = save_combined_csv(all_tenders, output_dir)
         log.info(f"Combined CSV: {combined_path} ({len(all_tenders)} rows)")
+
+        # Awards CSV — only tenders with award/winner data
+        awards_path = save_awards_csv(all_tenders, output_dir)
+        if awards_path:
+            awarded_count = len([t for t in all_tenders if t.get("award_winner") or t.get("award_date")])
+            log.info(f"Awards CSV: {awards_path} ({awarded_count} awarded tenders)")
 
     write_run_log(log_entries)
     return new_counts, all_new
