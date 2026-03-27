@@ -22,11 +22,12 @@ def _make_agent(portal_id: str, session: BrowserSession, scope: str = "active"):
     For archive/awards, wraps the GePNICArchiveAgent around GePNIC portals.
     """
     from portals.configs import PORTALS
-    from agents.gepnic  import GePNICAgent
-    from agents.gem     import GeMAgent
-    from agents.ireps   import IREPSAgent
-    from agents.cppp    import CPPPAgent
-    from agents.generic import GenericAgent
+    from agents.gepnic    import GePNICAgent
+    from agents.gem       import GeMAgent
+    from agents.ireps     import IREPSAgent
+    from agents.cppp      import CPPPAgent
+    from agents.generic   import GenericAgent
+    from agents.karnataka import KarnatakaAgent
 
     cfg = PORTALS[portal_id]
 
@@ -34,11 +35,12 @@ def _make_agent(portal_id: str, session: BrowserSession, scope: str = "active"):
         from agents.gepnic_archive import GePNICArchiveAgent
         return GePNICArchiveAgent(cfg, session, scope=scope)
 
-    if   cfg.platform == "gepnic":  return GePNICAgent(cfg, session)
-    elif cfg.platform == "gem_api": return GeMAgent(cfg, session)
-    elif cfg.platform == "ireps":   return IREPSAgent(cfg, session)
-    elif cfg.platform == "cppp":    return CPPPAgent(cfg, session)
-    else:                           return GenericAgent(cfg, session)
+    if   cfg.platform == "gepnic":          return GePNICAgent(cfg, session)
+    elif cfg.platform == "gem_api":         return GeMAgent(cfg, session)
+    elif cfg.platform == "ireps":           return IREPSAgent(cfg, session)
+    elif cfg.platform == "cppp":            return CPPPAgent(cfg, session)
+    elif cfg.platform == "karnataka_seam":  return KarnatakaAgent(cfg, session)
+    else:                                   return GenericAgent(cfg, session)
 
 
 class ScrapeTask:

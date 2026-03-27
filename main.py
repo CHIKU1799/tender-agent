@@ -11,11 +11,12 @@ from pathlib import Path
 from rich.live import Live
 
 from portals.configs import PORTALS
-from agents.gepnic  import GePNICAgent
-from agents.gem     import GeMAgent
-from agents.ireps   import IREPSAgent
-from agents.generic import GenericAgent
-from agents.cppp    import CPPPAgent
+from agents.gepnic    import GePNICAgent
+from agents.gem       import GeMAgent
+from agents.ireps     import IREPSAgent
+from agents.generic   import GenericAgent
+from agents.cppp      import CPPPAgent
+from agents.karnataka import KarnatakaAgent
 from agents.base    import ScrapeResult
 from core.browser   import BrowserSession
 from core.storage   import (
@@ -43,11 +44,12 @@ log = logging.getLogger("main")
 
 def make_agent(portal_id: str, session: BrowserSession):
     cfg = PORTALS[portal_id]
-    if   cfg.platform == "gepnic":  return GePNICAgent(cfg, session)
-    elif cfg.platform == "gem_api": return GeMAgent(cfg, session)
-    elif cfg.platform == "ireps":   return IREPSAgent(cfg, session)
-    elif cfg.platform == "cppp":    return CPPPAgent(cfg, session)
-    else:                           return GenericAgent(cfg, session)
+    if   cfg.platform == "gepnic":          return GePNICAgent(cfg, session)
+    elif cfg.platform == "gem_api":         return GeMAgent(cfg, session)
+    elif cfg.platform == "ireps":           return IREPSAgent(cfg, session)
+    elif cfg.platform == "cppp":            return CPPPAgent(cfg, session)
+    elif cfg.platform == "karnataka_seam":  return KarnatakaAgent(cfg, session)
+    else:                                   return GenericAgent(cfg, session)
 
 
 # ── Run portals ───────────────────────────────────────────────────────────────

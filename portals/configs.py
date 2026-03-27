@@ -194,14 +194,13 @@ PORTALS: dict[str, PortalConfig] = {
     "karnataka": PortalConfig(
         portal_id    = "karnataka",
         display_name = "Karnataka e-Procurement",
-        base_url     = "https://eproc.karnataka.gov.in/eprocure/app",
-        platform     = "gepnic",
+        base_url     = "https://eproc.karnataka.gov.in/eprocportal/pages/index.jsp",
+        platform     = "karnataka_seam",
         category     = "State",
-        session_seed_url = "https://eproc.karnataka.gov.in/eprocure/app?page=FrontEndLatestActiveTenders&service=page",
-        results_url  = "https://eproc.karnataka.gov.in/eprocure/app?component=%24DirectLink&page=FrontEndAdvancedSearchResult&service=direct",
-        archive_url  = "https://eproc.karnataka.gov.in/eprocure/app?page=FrontEndTendersInArchive&service=page",
-        awards_url   = "https://eproc.karnataka.gov.in/eprocure/app?page=FrontEndResultOfTenders&service=page",
+        session_seed_url = "https://eproc.karnataka.gov.in/eprocportal/pages/index.jsp",
+        results_url  = "https://eproc.karnataka.gov.in/eprocurement/common/eproc_tenders_list.seam",
         emoji        = "🌿",
+        notes        = "JSF/Seam portal — form-based search with date range, no CAPTCHA",
     ),
 
     # ── Maharashtra ───────────────────────────────────────────────────────────
