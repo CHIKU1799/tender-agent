@@ -1,247 +1,190 @@
-# Tender Agent 🏛️
+# 🏛️ Tender Agent
 
-A multi-portal Indian Government tender scraping agent with an interactive terminal interface.
-
-Supports **22 portals** — Central Govt, PSUs, State portals, and Ministry info pages.
-
----
-
-## Supported Portals
-
-### 🏛️ Central Government
-| ID | Portal | Platform | Notes |
-|----|--------|----------|-------|
-| `gem` | Government e-Marketplace | REST API | No browser needed |
-| `cppp` | CPPP / eprocure.gov.in | GePNIC | Largest central portal |
-| `defproc` | Ministry of Defence | GePNIC | MES, BRO, Navy, AF |
-| `ireps` | Indian Railways (IREPS) | Struts 2 | Zone-wise tenders |
-| `etenders` | NHAI / MoRTH / BSNL | GePNIC | etenders.gov.in |
-
-### 🏭 Public Sector Undertakings
-| ID | Portal | Platform |
-|----|--------|----------|
-| `ntpc` | NTPC e-Procurement | GePNIC |
-| `bhel` | BHEL e-Procurement | SAP Ariba |
-| `coalindia` | Coal India Tenders | GePNIC |
-| `ongc` | ONGC e-Tender | Custom |
-| `hal` | HAL e-Procurement | Custom |
-
-### 🗺️ State Portals
-| ID | State | Platform |
-|----|-------|----------|
-| `karnataka` | Karnataka | GePNIC |
-| `maharashtra` | Maharashtra | GePNIC |
-| `up` | Uttar Pradesh | GePNIC |
-| `tamilnadu` | Tamil Nadu | GePNIC |
-| `gujarat` | Gujarat | GePNIC |
-| `rajasthan` | Rajasthan | GePNIC |
-
-### ℹ️ Ministry Info Portals
-| ID | Portal |
-|----|--------|
-| `nhm` | NHM / Health Ministry |
-| `meity` | MeitY / Digital India |
-| `education` | Education Ministry (NEP) |
+**AI-powered scraper for Indian government procurement portals.**
+Scrapes active tenders, past/archive tenders, and awarded contracts from 19 portals — presented in a clean web dashboard.
 
 ---
 
-## Quick Start
+## Features
+
+- **19 portals** — CPPP, GeM, DefProc, eTenders, NTPC, Coal India, ONGC, IREPS, Maharashtra, UP, Tamil Nadu, Rajasthan, Karnataka, and more
+- **Web dashboard** at `http://localhost:5002` — search, filter, sort, export
+- **AI CAPTCHA bypass** — GPT-4o vision solves image CAPTCHAs on archive/awards pages
+- **Archive + Awards** — past closed tenders and who-won contract data
+- **Export** — CSV, JSON, SQLite — every run auto-saves to `output/`
+- **Live progress** — real-time per-portal updates in the browser
+
+---
+
+## Quickstart
+
+### Option A — Docker (recommended)
+
+> No Python setup needed — just Docker.
 
 ```bash
-# Clone
+# 1. Clone
 git clone https://github.com/CHIKU1799/tender-agent.git
 cd tender-agent
 
-# Install dependencies
-pip install -r requirements.txt
-playwright install chromium
+# 2. Set your OpenAI key
+echo "OPENAI_API_KEY=sk-proj-your-key-here" > .env
 
-# Run the interactive agent
-python main.py
+# 3. Start
+docker compose up --build
+```
+
+Open **http://localhost:5002**
+
+---
+
+### Option B — Local Python (3.9+)
+
+```bash
+# 1. Clone
+git clone https://github.com/CHIKU1799/tender-agent.git
+cd tender-agent
+
+# 2. One-command setup (virtualenv + deps + Chromium)
+bash setup.sh
+
+# 3. Add your OpenAI key
+nano .env    # set OPENAI_API_KEY=sk-proj-your-key-here
+
+# 4. Start
+source .venv/bin/activate
+python3 dashboard.py
+```
+
+Open **http://localhost:5002**
+
+---
+
+## Using the Dashboard
+
+1. **Select portals** in the left sidebar (grouped by category)
+2. **Choose scope** — Active / Archive / Awards / Both
+3. **Click ▶ Start Scraping** — live progress bar appears
+4. **Search, filter, sort** the results table
+5. **Export** via the CSV or JSON buttons
+
+---
+
+## Terminal Scraper (no dashboard)
+
+```bash
+# Scrape all 19 portals (2 pages each), save to output/
+python3 run_all.py
+
+# Interactive CLI with portal selection
+python3 main.py
 ```
 
 ---
 
-## How It Works
+## Portal Coverage
 
-### The Interactive Interface
+| Portal | Category | Notes |
+|--------|----------|-------|
+| CPPP (eprocure.gov.in) | Central | No CAPTCHA, paginated |
+| Government e-Marketplace (GeM) | Central | Live API |
+| Ministry of Defence (DefProc) | Central | GePNIC + DirectLink bypass |
+| NIC eTenders (NHAI / BSNL) | Central | GePNIC + DirectLink bypass |
+| Indian Railways (IREPS) | Central | Struts2 form |
+| NTPC | PSU | GePNIC + DirectLink bypass |
+| Coal India | PSU | GePNIC + DirectLink bypass |
+| ONGC | PSU | Generic scraper |
+| Maharashtra | State | GePNIC + DirectLink bypass |
+| Uttar Pradesh | State | GePNIC + DirectLink bypass |
+| Tamil Nadu | State | GePNIC + DirectLink bypass |
+| Rajasthan | State | GePNIC + DirectLink bypass |
+| Karnataka | State | JSF/Seam form, no CAPTCHA |
+| Gujarat | State | GePNIC + DirectLink bypass |
+| BHEL, HAL | PSU | SAP Ariba (partial) |
+| NHM / MeitY / Education | Info | Ministry HTML pages |
 
-Running `python main.py` opens a step-by-step terminal UI:
-
-```
-Step 1 — Select Portals
-  Choose from presets (All Central Govt, All PSUs, Everything...)
-  or pick individual portals with a checkbox menu
-
-Step 2 — Configure Filters
-  Max pages per portal (or all)
-  Organisation name filter
-  Whether to fetch detail pages (richer data, slower)
-
-Step 3 — Export Formats
-  CSV  — opens in Excel/Sheets
-  JSON — full structured data
-  SQLite — queryable database with all portals in one file
-
-Step 4 — Live Progress
-  Real-time progress bars per portal
-  Running tender count
-
-Step 5 — Summary
-  Per-portal table: total, NEW since last run, pages scraped
-  List of newly discovered tenders
-```
+**Archive & Awards pages** use **GPT-4o vision** to bypass image CAPTCHAs automatically.
 
 ---
 
-## CAPTCHA Bypass (GePNIC Portals)
-
-**14 out of 22 portals** run on NIC's GePNIC platform (defproc, cppp, etenders, ntpc, coalindia, karnataka, maharashtra, up, tamilnadu, gujarat, rajasthan, etc.).
-
-All of them have a CAPTCHA on their search form. Here's how we bypass it entirely:
-
-### Why it works
-The NIC GePNIC platform uses Apache Tapestry's `DirectLink` component. The search results page is a stateful server-side component that renders the current session's result set.
-
-When you navigate directly to:
-```
-{base_url}?component=$DirectLink&page=FrontEndAdvancedSearchResult&service=direct
-```
-...the server renders all active tenders as the default (no-filter) result set, **without validating that a search form was submitted**.
-
-### The 3-step bypass
-```
-1. Visit any page on the portal → server creates a JSESSIONID session cookie
-2. Navigate directly to the results URL above → server returns all active tenders
-3. Paginate using the #linkFwd (Next >) link — no CAPTCHA at any step
-```
-
-### Why this is not cracking/circumventing security
-- No CAPTCHA image is decoded or attacked
-- No hidden form fields are forged
-- The results URL is a publicly accessible endpoint
-- The CAPTCHA only guards the **search form** — not the **results component**
-- This is equivalent to bookmarking the results page directly
-
----
-
-## Architecture
+## Project Structure
 
 ```
 tender-agent/
-├── main.py                  # Entry point — orchestrates the full run
-│
 ├── agents/
-│   ├── base.py              # BaseAgent abstract class
-│   ├── gepnic.py            # GePNIC agent — covers 14 portals
-│   ├── gem.py               # GeM REST API agent
-│   ├── ireps.py             # Indian Railways agent
-│   └── generic.py           # Fallback for unexplored platforms
-│
-├── portals/
-│   └── configs.py           # All 22 portal configs (PortalConfig dataclasses)
-│
+│   ├── gepnic.py           # GePNIC active tenders (14 portals)
+│   ├── gepnic_archive.py   # Archive + awards with AI CAPTCHA
+│   ├── gem.py              # GeM via route interception
+│   ├── cppp.py             # CPPP paginated scraper
+│   ├── karnataka.py        # Karnataka JSF/Seam portal
+│   ├── ireps.py            # Indian Railways
+│   └── generic.py          # Fallback scraper
+├── ai/
+│   ├── client.py           # OpenAI GPT-4o singleton
+│   └── captcha_solver.py   # Screenshot → GPT-4o → solution
 ├── core/
-│   ├── browser.py           # Playwright session manager (shared across agents)
-│   ├── storage.py           # CSV / JSON / SQLite exporters + snapshot/diff store
-│   └── utils.py             # retry_async, parse_title_cell, helpers
-│
+│   ├── browser.py          # Playwright session manager
+│   ├── storage.py          # CSV / JSON / SQLite export
+│   └── orchestrator.py     # Parallel scraping + SSE events
 ├── interface/
-│   └── cli.py               # Rich + Questionary terminal UI
-│
-└── requirements.txt
+│   ├── cli.py              # Terminal UI
+│   └── dashboard/          # Flask web dashboard
+├── portals/configs.py      # All 19 portal definitions
+├── dashboard.py            # Web entry point
+├── main.py                 # CLI entry point
+├── run_all.py              # Batch all portals
+├── Dockerfile
+├── docker-compose.yml
+└── setup.sh
 ```
-
-### Adding a New Portal
-
-**For a GePNIC portal** — add one block to `portals/configs.py`:
-```python
-"myportal": PortalConfig(
-    portal_id        = "myportal",
-    display_name     = "My State Portal",
-    base_url         = "https://mystate.gov.in/nicgep/app",
-    platform         = "gepnic",
-    category         = "State",
-    session_seed_url = "https://mystate.gov.in/nicgep/app?page=FrontEndLatestActiveTenders&service=page",
-    results_url      = "https://mystate.gov.in/nicgep/app?component=%24DirectLink&page=FrontEndAdvancedSearchResult&service=direct",
-    emoji            = "🗺️",
-),
-```
-Zero Python changes needed. The `GePNICAgent` handles it automatically.
-
-**For a custom platform** — create a new agent class inheriting `BaseAgent`, register it in `main.py`'s `make_agent()` factory.
 
 ---
 
-## Libraries Used
+## Configuration
 
-| Library | Purpose |
-|---------|---------|
-| `playwright` | Browser automation — loads pages, executes JS, clicks buttons |
-| `playwright-stealth` | Hides `navigator.webdriver` and other bot fingerprints |
-| `fake-useragent` | Rotates real Chrome/Firefox User-Agent strings between pages |
-| `aiohttp` | HTTP client for GeM REST API (no browser needed for GeM) |
-| `rich` | Terminal UI — progress bars, tables, panels, live updates |
-| `questionary` | Interactive prompts — select, checkbox, confirm, text input |
-| `pydantic` | Data validation for portal configs |
-| `pyyaml` | Config file parsing |
-| `aiosqlite` | Async SQLite writes for the unified tenders database |
-| `pandas` | Post-processing and CSV export utilities |
-| `asyncio` | Async I/O coordination across multiple portal agents |
+Copy `.env.example` → `.env`:
+
+```env
+# Required ONLY for archive/awards CAPTCHA bypass
+OPENAI_API_KEY=sk-proj-your-key-here
+
+# Dashboard (optional)
+DASHBOARD_HOST=127.0.0.1
+DASHBOARD_PORT=5002
+```
+
+> Active tender scraping works **without** an OpenAI key.
+> The key is only needed for archive/past tenders and award results (which have image CAPTCHAs).
 
 ---
 
 ## Output Files
 
-After a run, all output is in `output/`:
+Saved to `output/` after every run:
 
-```
-output/
-├── defproc_tenders.csv       # Per-portal CSV (append mode across runs)
-├── defproc_tenders.json      # Per-portal JSON (overwritten each run)
-├── cppp_tenders.csv
-├── gem_tenders.json
-├── ...
-├── tenders.db                # Unified SQLite database (all portals, upsert)
-└── snapshots/
-    ├── defproc.json          # Previous run snapshot (for diff)
-    ├── cppp.json
-    └── ...
-```
-
-The SQLite database has a compound primary key on `(portal_id, tender_id)` — safe to run daily without duplicates.
+| File | Contents |
+|------|----------|
+| `{portal}_tenders.csv` | Per-portal data |
+| `all_tenders.csv` | All portals combined (47 columns) |
+| `awarded_tenders.csv` | Tenders with winner/AOC data |
+| `tenders.db` | SQLite (all portals) |
 
 ---
 
-## Daily Scheduling
+## Requirements
 
-```bash
-# Add to crontab — runs every day at 7am
-crontab -e
-0 7 * * * cd ~/tender-agent && python3 main.py >> logs/cron.log 2>&1
-```
-
-For headless/non-interactive daily runs, pass arguments directly (coming in v2).
+| Requirement | Version |
+|------------|---------|
+| Python | 3.9+ |
+| Chromium | Auto-installed by `setup.sh` |
+| OpenAI key | For archive/awards only |
 
 ---
 
-## Platform Support Status
+## Ethical Use
 
-| Platform | Status | Portals |
-|----------|--------|---------|
-| GePNIC | ✅ Full support + CAPTCHA bypass | 14 portals |
-| GeM API | ✅ Full support | 1 portal |
-| IREPS | 🔶 Basic support | 1 portal |
-| SAP Ariba (BHEL) | ⚠️ Needs exploration | 1 portal |
-| ONGC custom | ⚠️ Needs exploration | 1 portal |
-| HAL custom | ⚠️ Needs exploration | 1 portal |
-| Ministry info pages | 🔶 Generic extractor | 3 portals |
+This tool scrapes **public government procurement data** legally required to be disclosed under India's Government e-Procurement Policy. Please:
 
----
-
-## Ethical Notes
-
-- All scraped data is **publicly available** without login
-- **2.5–5 second delays** between every page request
-- No CAPTCHA cracking — only legitimate URL access patterns used
-- No authentication bypassed — only public endpoints accessed
+- Respect the built-in delays between requests (1–4 seconds)
+- Do not use for scraping at high volume or in violation of portal terms
+- This is intended for research, business intelligence, and compliance monitoring

@@ -1,0 +1,14 @@
+services:
+  tender-agent:
+    build: .
+    ports:
+      - "5002:5002"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DASHBOARD_HOST=0.0.0.0
+      - DASHBOARD_PORT=5002
+    volumes:
+      - ./output:/app/output       # scraped data persists on host
+      - ./logs:/app/logs           # logs persist on host
+      - ./screenshots:/app/screenshots
+    restart: unless-stopped
