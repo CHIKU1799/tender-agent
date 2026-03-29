@@ -40,8 +40,10 @@ logging.basicConfig(
 from interface.dashboard.app import app
 
 if __name__ == "__main__":
-    host = os.getenv("DASHBOARD_HOST", "127.0.0.1")
-    port = int(os.getenv("DASHBOARD_PORT", "5000"))
+    # PORT is used by Railway / Render / Fly.io; DASHBOARD_PORT for local
+    port = int(os.getenv("PORT") or os.getenv("DASHBOARD_PORT", "5002"))
+    # Bind to all interfaces when running in a cloud environment
+    host = os.getenv("DASHBOARD_HOST", "0.0.0.0" if os.getenv("PORT") else "127.0.0.1")
     print(f"\n  🏛️  Tender Agent Dashboard")
     print(f"  ➜  http://{host}:{port}\n")
     app.run(host=host, port=port, debug=False, threaded=True)

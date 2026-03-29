@@ -20,7 +20,7 @@ COPY . .
 # Runtime dirs
 RUN mkdir -p output logs screenshots
 
-# Expose dashboard port
+# Expose dashboard port (Railway/Render inject $PORT at runtime)
 EXPOSE 5002
 
 # Default: start the web dashboard
