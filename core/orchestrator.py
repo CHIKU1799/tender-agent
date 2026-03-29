@@ -1,11 +1,18 @@
 """
 Parallel scraping orchestrator for the web dashboard.
 Runs up to MAX_CONCURRENT portals in parallel, emitting SSE-style events.
+
+Thread model:
+  Flask runs in the main thread (sync).
+  Each ScrapeTask spins up a background thread with its own asyncio event loop.
+  Events are passed via a plain thread-safe queue.Queue — no cross-thread
+  asyncio primitives needed, avoiding Python 3.9 "Future attached to a
+  different loop" errors.
 """
 from __future__ import annotations
 import asyncio
 import logging
-from typing import AsyncIterator
+import queue as _queue
 from agents.base import ScrapeResult
 from core.browser import BrowserSession
 from core.storage import save_csv, save_json, save_sqlite, save_combined_csv, SnapshotStore
@@ -17,11 +24,6 @@ MAX_CONCURRENT = 3  # semaphore — max parallel portals
 
 
 def _make_agent(portal_id: str, session: BrowserSession, scope: str = "active"):
-    """
-    Agent factory that supports scope="active"|"archive"|"awards"|"both".
-    For archive/awards, wraps the GePNICArchiveAgent around GePNIC portals.
-    """
-    from portals.configs import PORTALS
     from agents.gepnic    import GePNICAgent
     from agents.gem       import GeMAgent
     from agents.ireps     import IREPSAgent
@@ -45,8 +47,10 @@ def _make_agent(portal_id: str, session: BrowserSession, scope: str = "active"):
 
 class ScrapeTask:
     """
-    Runs a multi-portal scrape job and makes progress available via
-    an async generator. Can be polled from the Flask SSE endpoint.
+    Runs a multi-portal scrape job in a background thread.
+    Progress events are placed into a thread-safe queue.Queue so the
+    Flask SSE endpoint can consume them from the main thread without
+    any asyncio cross-thread complexity.
     """
 
     def __init__(self, task_id: str, portal_ids: list[str], filters: dict):
@@ -54,20 +58,24 @@ class ScrapeTask:
         self.portal_ids = portal_ids
         self.filters    = filters
         self.results:   dict[str, ScrapeResult] = {}
-        self._events:   asyncio.Queue = asyncio.Queue()
-        self._done = False
+        # Plain thread-safe queue — works from any thread/loop without issues
+        self._events:   _queue.Queue = _queue.Queue()
+        self._done:     bool = False
 
     def emit(self, event: dict):
-        self._events.put_nowait(event)
+        """Put an event — safe to call from async or sync code, any thread."""
+        self._events.put(event)
 
-    async def events(self) -> AsyncIterator[dict]:
-        while not self._done or not self._events.empty():
-            try:
-                ev = await asyncio.wait_for(self._events.get(), timeout=0.5)
-                yield ev
-            except asyncio.TimeoutError:
-                if self._done:
-                    break
+    def next_event(self, timeout: float = 2.0):
+        """
+        Block for up to `timeout` seconds waiting for the next event.
+        Returns the event dict, or None on timeout.
+        Raises queue.Empty only if timeout==0 (non-blocking).
+        """
+        try:
+            return self._events.get(timeout=timeout)
+        except _queue.Empty:
+            return None
 
     async def run(self):
         scope    = self.filters.get("scope", "active")
@@ -76,12 +84,16 @@ class ScrapeTask:
         f_detail = self.filters.get("fetch_details", False)
         semaphore = asyncio.Semaphore(MAX_CONCURRENT)
 
-        async with BrowserSession() as session:
-            tasks = [
-                self._run_one(pid, session, scope, max_pgs, org_flt, f_detail, semaphore)
-                for pid in self.portal_ids
-            ]
-            await asyncio.gather(*tasks, return_exceptions=True)
+        try:
+            async with BrowserSession() as session:
+                tasks = [
+                    self._run_one(pid, session, scope, max_pgs, org_flt, f_detail, semaphore)
+                    for pid in self.portal_ids
+                ]
+                await asyncio.gather(*tasks, return_exceptions=True)
+        except Exception as e:
+            log.error(f"[orch] BrowserSession error: {e}")
+            self.emit({"type": "error", "message": str(e)})
 
         # Save outputs
         all_tenders: list[dict] = []
