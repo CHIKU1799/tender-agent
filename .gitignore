@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.env
+output/
+logs/
+screenshots/
+*.sqlite
+*.db
+node_modules/
+.venv/
+venv/
+Tendor Scrapper

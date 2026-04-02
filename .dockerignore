@@ -1,0 +1,11 @@
+.env
+output/
+logs/
+screenshots/
+__pycache__/
+*.pyc
+*.db
+.DS_Store
+*.egg-info/
+.git/
+.venv/

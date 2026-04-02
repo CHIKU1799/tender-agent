@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Tender Agent — India Government Tender Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">
+      <span class="logo-icon">🏛️</span>
+      <span class="logo-text">Tender Agent</span>
+    </div>
+    <p class="logo-sub">All-India Procurement Intelligence</p>
+  </div>
+
+  <!-- Scope -->
+  <div class="sidebar-section">
+    <h3 class="section-title">Data Scope</h3>
+    <div class="scope-group">
+      <label class="scope-option"><input type="radio" name="scope" value="active" checked/><span>🟢 Active Tenders</span></label>
+      <label class="scope-option"><input type="radio" name="scope" value="archive"/><span>📦 Archive / Past</span></label>
+      <label class="scope-option"><input type="radio" name="scope" value="awards"/><span>🏆 Awarded Contracts</span></label>
+      <label class="scope-option"><input type="radio" name="scope" value="both"/><span>📚 Archive + Awards</span></label>
+      <label class="scope-option"><input type="radio" name="scope" value="all"/><span>🌐 Everything (All Time)</span></label>
+    </div>
+  </div>
+
+  <!-- Portals -->
+  <div class="sidebar-section">
+    <h3 class="section-title">Portals</h3>
+    <div class="portal-actions">
+      <button class="btn-link" onclick="selectAll()">All</button>
+      <span class="divider">|</span>
+      <button class="btn-link" onclick="deselectAll()">None</button>
+      <span class="divider">|</span>
+      <button class="btn-link" onclick="selectCat('Central')">Central</button>
+      <span class="divider">|</span>
+      <button class="btn-link" onclick="selectCat('State')">State</button>
+      <span class="divider">|</span>
+      <button class="btn-link" onclick="selectCat('Aggregator')">Agg</button>
+    </div>
+    <div id="portal-list" class="portal-list">
+      <div class="loading-text">Loading…</div>
+    </div>
+  </div>
+
+  <!-- Scrape options -->
+  <div class="sidebar-section">
+    <h3 class="section-title">Scrape Options</h3>
+    <label class="form-label">Max Pages per Portal</label>
+    <input type="number" id="max-pages" class="form-input" placeholder="All pages" min="1"/>
+    <label class="form-label">Organisation Filter</label>
+    <input type="text" id="org-filter" class="form-input" placeholder="e.g. NTPC, Railways…"/>
+    <label class="checkbox-row form-label">
+      <input type="checkbox" id="fetch-details"/> Fetch full details (slower)
+    </label>
+  </div>
+
+  <!-- CAPTCHA status -->
+  <div class="sidebar-section">
+    <h3 class="section-title">CAPTCHA Services</h3>
+    <div id="captcha-status"><div class="loading-text">Checking…</div></div>
+  </div>
+
+  <!-- Scrape button -->
+  <div class="sidebar-section">
+    <button id="scrape-btn" class="btn-primary" onclick="startScrape()">▶ Start Scraping</button>
+    <div id="scrape-status" class="scrape-status"></div>
+    <div id="db-info" class="db-info"></div>
+  </div>
+</aside>
+
+<main class="main">
+
+  <!-- Tabs -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="showTab('tenders',this)">📋 Tenders</button>
+    <button class="tab-btn"        onclick="showTab('clean',  this)">🧹 Cleaner</button>
+    <button class="tab-btn"        onclick="showTab('stats',  this)">📊 Analytics</button>
+  </div>
+
+  <!-- ═══ TAB: Tenders ═══ -->
+  <div id="tab-tenders" class="tab-content active">
+
+    <!-- Top bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 class="page-title">Tenders</h1>
+        <span id="total-count" class="count-badge">0</span>
+        <span id="db-badge" class="db-badge" title="Total in database">DB: 0</span>
+        <span id="cleaned-badge" class="cleaned-badge hidden">✓ Cleaned</span>
+      </div>
+      <div class="topbar-right">
+        <input type="text" id="search-input" class="search-box" placeholder="🔍 Search title, org, tender ID…" oninput="debounceSearch()"/>
+        <button class="btn-export" onclick="exportCSV()">⬇ CSV</button>
+        <button class="btn-export" onclick="exportJSON()">⬇ JSON</button>
+      </div>
+    </header>
+
+    <!-- Filter bar -->
+    <div class="filter-bar">
+      <select id="f-status"   class="form-select" onchange="loadTenders(1)">
+        <option value="">All Statuses</option>
+        <option value="Active">🟢 Active</option>
+        <option value="Archive">📦 Archive</option>
+        <option value="Awarded">🏆 Awarded</option>
+        <option value="Cancelled">❌ Cancelled</option>
+      </select>
+
+      <select id="f-state" class="form-select" onchange="loadTenders(1)">
+        <option value="">All States</option>
+      </select>
+
+      <select id="f-portal" class="form-select" onchange="loadTenders(1)">
+        <option value="">All Portals</option>
+      </select>
+
+      <select id="f-category" class="form-select" onchange="loadTenders(1)">
+        <option value="">All Categories</option>
+      </select>
+
+      <select id="f-type" class="form-select" onchange="loadTenders(1)">
+        <option value="">All Types</option>
+      </select>
+
+      <div class="price-range">
+        <span class="price-label">₹</span>
+        <input type="number" id="f-price-min" class="price-input" placeholder="Min" oninput="debounceSearch()"/>
+        <span class="price-sep">—</span>
+        <input type="number" id="f-price-max" class="price-input" placeholder="Max" oninput="debounceSearch()"/>
+        <span class="price-label">Cr</span>
+      </div>
+
+      <div class="date-range">
+        <span class="price-label">Close:</span>
+        <input type="date" id="f-date-from" class="date-input" onchange="loadTenders(1)"/>
+        <span class="price-sep">to</span>
+        <input type="date" id="f-date-to"   class="date-input" onchange="loadTenders(1)"/>
+      </div>
+
+      <label class="toggle-label">
+        <input type="checkbox" id="show-cleaned" onchange="loadTenders(1)"/> Cleaned only
+      </label>
+
+      <button class="btn-link" onclick="clearFilters()">✕ Clear</button>
+    </div>
+
+    <!-- Stats bar -->
+    <div class="stats-bar">
+      <div class="stat-card"><span class="stat-num" id="stat-total">—</span><span class="stat-label">Total DB</span></div>
+      <div class="stat-card"><span class="stat-num" id="stat-active">—</span><span class="stat-label">Active</span></div>
+      <div class="stat-card"><span class="stat-num" id="stat-awarded">—</span><span class="stat-label">Awarded</span></div>
+      <div class="stat-card"><span class="stat-num" id="stat-archived">—</span><span class="stat-label">Archive</span></div>
+      <div class="stat-card"><span class="stat-num" id="stat-portals">—</span><span class="stat-label">Portals</span></div>
+    </div>
+
+    <!-- Progress -->
+    <div id="progress-wrap" class="progress-wrap hidden">
+      <div class="progress-label" id="progress-label">Scraping…</div>
+      <div class="progress-track"><div id="progress-bar" class="progress-bar" style="width:0%"></div></div>
+      <div id="progress-log" class="progress-log"></div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <table class="tender-table">
+        <thead>
+          <tr>
+            <th onclick="sortBy('portal_id')"        class="sortable">Portal</th>
+            <th onclick="sortBy('title')"             class="sortable">Title</th>
+            <th onclick="sortBy('organisation')"      class="sortable">Organisation</th>
+            <th onclick="sortBy('state')"             class="sortable">State</th>
+            <th onclick="sortBy('published_date')"    class="sortable">Published</th>
+            <th onclick="sortBy('closing_date')"      class="sortable">Closing</th>
+            <th onclick="sortBy('tender_value_inr')"  class="sortable">Value (₹)</th>
+            <th onclick="sortBy('status')"            class="sortable">Status</th>
+            <th>Links</th>
+          </tr>
+        </thead>
+        <tbody id="tender-body">
+          <tr><td colspan="9" class="empty-msg">Run a scrape to get started.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+  <!-- ═══ TAB: Cleaner ═══ -->
+  <div id="tab-clean" class="tab-content">
+    <div class="clean-container">
+      <div class="clean-header">
+        <h2>🧹 Data Cleaner</h2>
+        <p class="clean-subtitle">Fix dates, values, deduplicate, score completeness — all data is preserved.</p>
+      </div>
+      <div class="clean-card">
+        <h3 class="clean-card-title">⚙️ Options</h3>
+        <div class="clean-options-grid">
+          <div class="clean-option">
+            <label class="form-label">Fuzzy Dedup Threshold</label>
+            <input type="range" id="fuzz-thresh" min="0.7" max="1.0" step="0.01" value="0.92"
+                   oninput="document.getElementById('fuzz-val').textContent=this.value"/>
+            <span class="range-val" id="fuzz-val">0.92</span>
+          </div>
+          <div class="clean-option">
+            <label class="checkbox-row form-label" style="margin-top:0">
+              <input type="checkbox" id="remove-incomplete"/> Remove incomplete tenders
+            </label>
+            <input type="range" id="min-complete" min="0.1" max="0.9" step="0.05" value="0.20"
+                   oninput="document.getElementById('complete-val').textContent=(this.value*100|0)+'%'"/>
+            <span class="range-val" id="complete-val">20%</span>
+          </div>
+          <div class="clean-option">
+            <label class="checkbox-row form-label" style="margin-top:0">
+              <input type="checkbox" id="save-cleaned" checked/> Save to output/all_tenders_cleaned.csv
+            </label>
+          </div>
+        </div>
+        <button class="btn-primary" id="clean-btn" onclick="runCleaner()" style="max-width:200px;margin-top:16px">
+          🧹 Run Cleaner
+        </button>
+        <span id="clean-spinner" class="spinner hidden"></span>
+      </div>
+      <div id="clean-report-card" class="clean-card hidden">
+        <h3 class="clean-card-title">📊 Report</h3>
+        <div id="clean-report-grid" class="report-grid"></div>
+        <div style="margin-top:14px;display:flex;gap:10px">
+          <button class="btn-export" onclick="downloadCleaned()">⬇ Download Cleaned CSV</button>
+          <button class="btn-export" onclick="viewCleaned()">👁 View in Table</button>
+        </div>
+      </div>
+      <div id="clean-preview-card" class="clean-card hidden">
+        <h3 class="clean-card-title">🔍 Preview (first 10)</h3>
+        <div class="table-wrap" style="margin-top:0">
+          <table class="tender-table">
+            <thead><tr>
+              <th>Portal</th><th>Title</th><th>Org</th><th>State</th>
+              <th>Published</th><th>Closing</th><th>Value</th><th>Status</th><th>Score</th>
+            </tr></thead>
+            <tbody id="clean-preview-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ TAB: Analytics ═══ -->
+  <div id="tab-stats" class="tab-content">
+    <div class="analytics-container">
+      <div class="clean-header"><h2>📊 Analytics</h2><p class="clean-subtitle">All-time accumulated database statistics</p></div>
+      <div id="analytics-content" class="clean-card"><div class="loading-text">Click the Analytics tab to load…</div></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────
+let portals     = [];
+let currentPage = 1;
+let totalPages  = 1;
+let sortCol     = 'scraped_at';
+let sortDir     = 'desc';
+let searchTimer = null;
+
+// ── Init ──────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadPortals();
+  loadTenders(1);
+  loadStats();
+  loadCaptchaStatus();
+});
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(e => e.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'stats') renderAnalytics();
+}
+
+// ── Portals ───────────────────────────────────────────────────────────────
+async function loadPortals() {
+  const res  = await fetch('/api/portals');
+  portals    = await res.json();
+  const list = document.getElementById('portal-list');
+  const sel  = document.getElementById('f-portal');
+
+  const cats = [...new Set(portals.map(p => p.category))];
+  list.innerHTML = '';
+  sel.innerHTML  = '<option value="">All Portals</option>';
+
+  for (const cat of cats) {
+    const grp = document.createElement('div');
+    grp.className = 'portal-group';
+    grp.dataset.cat = cat;
+    grp.innerHTML = `<div class="portal-cat">${cat}</div>`;
+
+    portals.filter(p => p.category === cat).forEach(p => {
+      const badges = [
+        p.state ? `<span class="mini-badge sta">${p.state.substring(0,3)}</span>` : '',
+        p.has_archive ? '<span class="mini-badge arc">arch</span>' : '',
+        p.has_awards  ? '<span class="mini-badge awd">awd</span>'  : '',
+      ].filter(Boolean).join('');
+
+      const lbl = document.createElement('label');
+      lbl.className = 'portal-item';
+      lbl.innerHTML = `
+        <input type="checkbox" value="${p.id}" checked/>
+        <span class="portal-emoji">${p.emoji}</span>
+        <span class="portal-name">${p.name}</span>${badges}`;
+      grp.appendChild(lbl);
+
+      const opt = document.createElement('option');
+      opt.value = p.id; opt.textContent = `${p.emoji} ${p.name}`;
+      sel.appendChild(opt);
+    });
+    list.appendChild(grp);
+  }
+}
+
+function selectAll()       { document.querySelectorAll('#portal-list input[type=checkbox]').forEach(c => c.checked = true); }
+function deselectAll()     { document.querySelectorAll('#portal-list input[type=checkbox]').forEach(c => c.checked = false); }
+function selectCat(cat)    {
+  document.querySelectorAll('#portal-list .portal-group').forEach(g => {
+    const match = g.dataset.cat === cat;
+    g.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = match);
+  });
+}
+
+function clearFilters() {
+  ['f-status','f-state','f-portal','f-category','f-type'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  ['f-price-min','f-price-max','f-date-from','f-date-to','search-input'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const cc = document.getElementById('show-cleaned');
+  if (cc) cc.checked = false;
+  loadTenders(1);
+}
+
+// ── CAPTCHA status ────────────────────────────────────────────────────────
+async function loadCaptchaStatus() {
+  try {
+    const res  = await fetch('/api/captcha/status');
+    const data = await res.json();
+    const caps = data.capabilities;
+    const el   = document.getElementById('captcha-status');
+    el.className = 'captcha-status-grid';
+    el.innerHTML = [
+      {label:'Image', key:'image_text'}, {label:'Math',key:'math'},
+      {label:'Slider',key:'slider'}, {label:'reCAPTCHA',key:'recaptcha'},
+      {label:'hCaptcha',key:'hcaptcha'}, {label:'Audio',key:'audio'},
+    ].map(i => `<div class="cap-item ${caps[i.key]?'cap-ok':'cap-off'}" title="${i.key}">
+      <span>${caps[i.key]?'✓':'✗'}</span><span>${i.label}</span></div>`).join('');
+  } catch(e) {}
+}
+
+// ── Scraping ──────────────────────────────────────────────────────────────
+async function startScrape() {
+  const selected = [...document.querySelectorAll('#portal-list input:checked')].map(c => c.value);
+  if (!selected.length) { alert('Select at least one portal.'); return; }
+
+  const scope    = document.querySelector('input[name=scope]:checked').value;
+  const maxPages = parseInt(document.getElementById('max-pages').value) || null;
+  const orgFilt  = document.getElementById('org-filter').value.trim() || null;
+  const details  = document.getElementById('fetch-details').checked;
+
+  // Show scope confirmation
+  const statusEl = document.getElementById('scrape-status');
+  const labels = {active:'🟢 Active',archive:'📦 Archive',awards:'🏆 Awards',both:'📚 Both',all:'🌐 All'};
+  statusEl.textContent = `Scope: ${labels[scope]||scope}`;
+  statusEl.style.color = scope==='active' ? '#27ae60' : '#e67e22';
+
+  const btn = document.getElementById('scrape-btn');
+  btn.disabled = true; btn.textContent = '⏳ Scraping…';
+
+  document.getElementById('progress-wrap').classList.remove('hidden');
+  document.getElementById('progress-log').innerHTML = '';
+
+  const res = await fetch('/api/scrape', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({portals: selected, filters:{scope, max_pages:maxPages, org_filter:orgFilt, fetch_details:details}})
+  });
+  const {task_id} = await res.json();
+  streamProgress(task_id, selected.length, scope);
+}
+
+function streamProgress(taskId, total, scope) {
+  const src = new EventSource(`/api/stream/${taskId}`);
+  let done  = 0;
+
+  src.onmessage = ev => {
+    const data = JSON.parse(ev.data);
+    const log  = document.getElementById('progress-log');
+    const bar  = document.getElementById('progress-bar');
+    const lbl  = document.getElementById('progress-label');
+
+    if (data.type === 'start') {
+      log.innerHTML += `<div class="log-item start">▶ ${data.name} [${data.scope||scope}]</div>`;
+    } else if (data.type === 'progress') {
+      lbl.textContent = `${data.portal_id} — page ${data.page} (${data.count} tenders)`;
+    } else if (data.type === 'complete') {
+      done++;
+      bar.style.width = Math.round(done/total*100) + '%';
+      const icon = data.errors?.length ? '⚠' : '✓';
+      log.innerHTML += `<div class="log-item ${icon==='✓'?'ok':'warn'}">${icon} ${data.portal_id}: ${data.count} tenders [${data.scope||scope}]</div>`;
+      log.scrollTop = log.scrollHeight;
+    } else if (data.type === 'done') {
+      bar.style.width = '100%';
+      lbl.textContent = `✓ Done — ${data.total} tenders this run (all previous data preserved)`;
+      src.close();
+      const btn = document.getElementById('scrape-btn');
+      btn.disabled = false; btn.textContent = '▶ Start Scraping';
+      setTimeout(() => { loadTenders(1); loadStats(); }, 600);
+    }
+  };
+  src.onerror = () => src.close();
+}
+
+// ── Table ─────────────────────────────────────────────────────────────────
+async function loadTenders(page) {
+  currentPage = page;
+  const params = new URLSearchParams({
+    page, per_page:50, sort:sortCol, dir:sortDir,
+    search:   document.getElementById('search-input').value || '',
+    status:   document.getElementById('f-status').value    || '',
+    state:    document.getElementById('f-state').value     || '',
+    portal:   document.getElementById('f-portal').value    || '',
+    category: document.getElementById('f-category').value  || '',
+    type:     document.getElementById('f-type').value      || '',
+  });
+
+  const priceMin = parseFloat(document.getElementById('f-price-min').value);
+  const priceMax = parseFloat(document.getElementById('f-price-max').value);
+  if (!isNaN(priceMin)) params.set('price_min', priceMin * 1e7); // Convert Cr to ₹
+  if (!isNaN(priceMax)) params.set('price_max', priceMax * 1e7);
+
+  const dateFrom = document.getElementById('f-date-from').value;
+  const dateTo   = document.getElementById('f-date-to').value;
+  if (dateFrom) params.set('date_from', dateFrom);
+  if (dateTo)   params.set('date_to',   dateTo);
+
+  if (document.getElementById('show-cleaned')?.checked) params.set('cleaned','true');
+
+  const res  = await fetch(`/api/tenders?${params}`);
+  const data = await res.json();
+
+  document.getElementById('total-count').textContent = data.total.toLocaleString() + ' results';
+  totalPages = data.pages;
+  renderTable(data.tenders);
+  renderPagination(data.total, data.pages);
+}
+
+function renderTable(rows) {
+  const tbody = document.getElementById('tender-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-msg">No tenders match your filters.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td><span class="portal-badge">${r.portal_id||''}</span></td>
+      <td class="col-title" title="${esc(r.title)}">${esc((r.title||'—').substring(0,75))}${(r.title||'').length>75?'…':''}</td>
+      <td class="col-org">${esc(r.organisation||'—')}</td>
+      <td class="col-state">${esc(r.state||'—')}</td>
+      <td class="col-date">${r.published_date||'—'}</td>
+      <td class="col-date ${isExpiring(r.closing_date)?'expiring':''}">${r.closing_date||'—'}</td>
+      <td class="col-value">${fmtVal(r.tender_value_inr)}</td>
+      <td><span class="status-badge status-${(r.status||'active').toLowerCase()}">${r.status||'Active'}</span></td>
+      <td class="col-links">
+        ${r.detail_url?`<a href="${esc(r.detail_url)}" target="_blank" class="link-btn">View</a>`:''}
+        ${r.award_winner?`<span class="award-tag" title="Awarded: ${esc(r.award_winner)}">🏆</span>`:''}
+        ${r.emd_inr?`<span class="mini-info" title="EMD: ₹${r.emd_inr}">EMD</span>`:''}
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderPagination(total, pages) {
+  const p = document.getElementById('pagination');
+  if (pages <= 1) { p.innerHTML = ''; return; }
+  let h = '';
+  if (currentPage > 1) h += `<button onclick="loadTenders(${currentPage-1})">‹ Prev</button>`;
+  h += `<span class="page-info">Page ${currentPage} of ${pages} · ${total.toLocaleString()} records</span>`;
+  if (currentPage < pages) h += `<button onclick="loadTenders(${currentPage+1})">Next ›</button>`;
+  p.innerHTML = h;
+}
+
+function sortBy(col) {
+  if (sortCol === col) sortDir = sortDir==='asc'?'desc':'asc';
+  else { sortCol=col; sortDir='asc'; }
+  loadTenders(1);
+}
+
+function debounceSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => loadTenders(1), 350);
+}
+
+function isExpiring(d) {
+  if (!d) return false;
+  const dt = new Date(d), now = new Date();
+  return dt > now && (dt-now) < 3*86400000;
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────
+async function loadStats() {
+  const res  = await fetch('/api/stats');
+  const data = await res.json();
+  document.getElementById('stat-total').textContent    = (data.total||0).toLocaleString();
+  document.getElementById('stat-active').textContent   = (data.active||0).toLocaleString();
+  document.getElementById('stat-awarded').textContent  = (data.awarded||0).toLocaleString();
+  document.getElementById('stat-archived').textContent = (data.archived||0).toLocaleString();
+  document.getElementById('stat-portals').textContent  = Object.keys(data.by_portal||{}).length;
+  document.getElementById('db-badge').textContent      = `DB: ${(data.total||0).toLocaleString()}`;
+
+  // Populate state filter
+  const stSel = document.getElementById('f-state');
+  const opts  = data.filter_options || {};
+  if (opts.states?.length) {
+    stSel.innerHTML = '<option value="">All States</option>';
+    opts.states.forEach(s => {
+      const o = document.createElement('option'); o.value=s; o.textContent=s;
+      stSel.appendChild(o);
+    });
+  }
+  if (opts.categories?.length) {
+    const catSel = document.getElementById('f-category');
+    catSel.innerHTML = '<option value="">All Categories</option>';
+    opts.categories.forEach(c => {
+      const o = document.createElement('option'); o.value=c; o.textContent=c;
+      catSel.appendChild(o);
+    });
+  }
+  if (opts.types?.length) {
+    const typSel = document.getElementById('f-type');
+    typSel.innerHTML = '<option value="">All Types</option>';
+    opts.types.forEach(t => {
+      const o = document.createElement('option'); o.value=t; o.textContent=t;
+      typSel.appendChild(o);
+    });
+  }
+  if (data.has_cleaned) document.getElementById('cleaned-badge').classList.remove('hidden');
+}
+
+// ── Analytics ──────────────────────────────────────────────────────────────
+async function renderAnalytics() {
+  const res  = await fetch('/api/stats');
+  const data = await res.json();
+  const el   = document.getElementById('analytics-content');
+
+  const portals = Object.entries(data.by_portal||{}).sort((a,b)=>b[1]-a[1]);
+  const states  = Object.entries(data.by_state||{}).sort((a,b)=>b[1]-a[1]).slice(0,15);
+  const maxP    = portals[0]?.[1]||1;
+  const maxS    = states[0]?.[1]||1;
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div>
+        <h3 class="clean-card-title">By Portal</h3>
+        <div class="portal-bars">${portals.map(([pid,n])=>`
+          <div class="bar-row">
+            <span class="bar-label">${pid}</span>
+            <div class="bar-track"><div class="bar-fill" style="width:${(n/maxP*100).toFixed(1)}%"></div></div>
+            <span class="bar-count">${n.toLocaleString()}</span>
+          </div>`).join('')}
+        </div>
+      </div>
+      <div>
+        <h3 class="clean-card-title">By State</h3>
+        <div class="portal-bars">${states.map(([st,n])=>`
+          <div class="bar-row">
+            <span class="bar-label">${st||'Unknown'}</span>
+            <div class="bar-track"><div class="bar-fill" style="width:${(n/maxS*100).toFixed(1)}%;background:linear-gradient(90deg,#27ae60,#2ecc71)"></div></div>
+            <span class="bar-count">${n.toLocaleString()}</span>
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="report-grid" style="margin-top:20px">
+      ${[['Total',data.total],['Active',data.active],['Awarded',data.awarded],['Archive',data.archived],
+         ['Portals',Object.keys(data.by_portal||{}).length],['States',Object.keys(data.by_state||{}).length]]
+        .map(([l,v])=>`<div class="report-stat"><span class="report-num">${(v||0).toLocaleString()}</span><span class="report-label">${l}</span></div>`).join('')}
+    </div>`;
+}
+
+// ── Cleaner ───────────────────────────────────────────────────────────────
+async function runCleaner() {
+  const btn = document.getElementById('clean-btn');
+  const sp  = document.getElementById('clean-spinner');
+  btn.disabled = true; sp.classList.remove('hidden');
+  document.getElementById('clean-report-card').classList.add('hidden');
+  document.getElementById('clean-preview-card').classList.add('hidden');
+
+  const res  = await fetch('/api/clean', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      fuzzy_dedup_threshold: parseFloat(document.getElementById('fuzz-thresh').value),
+      remove_incomplete:     document.getElementById('remove-incomplete').checked,
+      min_completeness:      parseFloat(document.getElementById('min-complete').value),
+      save:                  document.getElementById('save-cleaned').checked,
+    })
+  });
+  const data = await res.json();
+  btn.disabled = false; sp.classList.add('hidden');
+
+  if (data.error) { alert(data.error); return; }
+
+  const s = data.report.stats;
+  const items = [
+    ['Input',s.input],['Output',s.output],['Removed',s.input-s.output],
+    ['Dates fixed',s.date_fixed],['Values parsed',s.value_fixed],
+    ['Orgs normalised',s.org_normalised],['HTML stripped',s.html_stripped],
+    ['Exact dupes',s.exact_dupes],['Fuzzy dupes',s.fuzzy_dupes],
+    ['Mean completeness',(data.report.completeness.mean*100).toFixed(1)+'%'],
+  ];
+  document.getElementById('clean-report-grid').innerHTML =
+    items.map(([l,v])=>`<div class="report-stat"><span class="report-num">${v}</span><span class="report-label">${l}</span></div>`).join('');
+  document.getElementById('clean-report-card').classList.remove('hidden');
+
+  const pf = ['portal_id','title','organisation','state','published_date','closing_date','tender_value_inr','status','_completeness'];
+  document.getElementById('clean-preview-body').innerHTML =
+    (data.preview||[]).map(r=>`<tr>
+      <td><span class="portal-badge">${r.portal_id||''}</span></td>
+      <td class="col-title">${esc((r.title||'').substring(0,55))}</td>
+      <td>${esc(r.organisation||'')}</td>
+      <td>${esc(r.state||'')}</td>
+      <td class="col-date">${r.published_date||''}</td>
+      <td class="col-date">${r.closing_date||''}</td>
+      <td class="col-value">${fmtVal(r.tender_value_inr)}</td>
+      <td><span class="status-badge status-${(r.status||'active').toLowerCase()}">${r.status||''}</span></td>
+      <td><div class="score-bar"><div class="score-fill" style="width:${((r._completeness||0)*100).toFixed(0)}%"></div><span class="score-txt">${((r._completeness||0)*100).toFixed(0)}%</span></div></td>
+    </tr>`).join('');
+  document.getElementById('clean-preview-card').classList.remove('hidden');
+  document.getElementById('cleaned-badge').classList.remove('hidden');
+  await loadStats();
+}
+
+function downloadCleaned() { window.location.href='/api/clean/download'; }
+function viewCleaned() {
+  const cc = document.getElementById('show-cleaned'); if(cc) cc.checked=true;
+  showTab('tenders', document.querySelector('.tab-btn'));
+  loadTenders(1);
+}
+
+// ── Export ────────────────────────────────────────────────────────────────
+function exportCSV() {
+  const cleaned = document.getElementById('show-cleaned')?.checked;
+  const status  = document.getElementById('f-status').value;
+  const scope   = status==='Archive'?'archive': status==='Awarded'?'awards':'all';
+  window.location.href = `/api/export?scope=${scope}${cleaned?'&cleaned=true':''}`;
+}
+async function exportJSON() {
+  const params = new URLSearchParams({per_page:200,page:1,
+    status: document.getElementById('f-status').value||'',
+    state:  document.getElementById('f-state').value||'',
+  });
+  if (document.getElementById('show-cleaned')?.checked) params.set('cleaned','true');
+  const res  = await fetch(`/api/tenders?${params}`);
+  const data = await res.json();
+  const blob = new Blob([JSON.stringify(data.tenders,null,2)],{type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href=url; a.download='tenders.json'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtVal(v) {
+  if (!v||v==='—') return '—';
+  const n = parseFloat(String(v).replace(/[^\d.]/g,''));
+  if (isNaN(n)) return v;
+  if (n>=1e7) return '₹'+(n/1e7).toFixed(2)+' Cr';
+  if (n>=1e5) return '₹'+(n/1e5).toFixed(2)+' L';
+  return '₹'+n.toLocaleString('en-IN');
+}
+</script>
+</body>
+</html>

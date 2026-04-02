@@ -1,0 +1,31 @@
+# ── Browser automation ──────────────────────────────────────────────────────
+playwright>=1.42.0
+playwright-stealth>=1.0.6
+fake-useragent>=1.4.0
+
+# ── HTTP / async ────────────────────────────────────────────────────────────
+aiohttp>=3.9.0
+
+# ── Data / validation ───────────────────────────────────────────────────────
+pydantic>=2.6.0
+pandas>=2.1.0
+aiosqlite>=0.20.0
+
+# ── Terminal UI ─────────────────────────────────────────────────────────────
+rich>=13.7.0
+questionary>=2.0.1
+
+# ── Config ──────────────────────────────────────────────────────────────────
+pyyaml>=6.0.1
+python-dotenv>=1.0.0
+
+# ── AI / CAPTCHA ────────────────────────────────────────────────────────────
+openai>=1.30.0          # GPT-4o image CAPTCHA + Whisper audio CAPTCHA
+
+# ── Web dashboard ───────────────────────────────────────────────────────────
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# ── Data cleaning ────────────────────────────────────────────────────────────
+python-dateutil>=2.8.2  # Robust date parsing fallback
+unicodedata2>=15.1.0    # Better Unicode normalisation (optional, falls back to stdlib)
