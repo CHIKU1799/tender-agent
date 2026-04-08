@@ -15,7 +15,10 @@ import logging
 import queue as _queue
 from agents.base import ScrapeResult
 from core.browser import BrowserSession
-from core.storage import save_csv, save_json, save_sqlite, save_combined_csv, SnapshotStore
+from core.storage import (
+    save_csv, save_json, save_sqlite, save_combined_csv,
+    save_daily_snapshot, SnapshotStore,
+)
 from portals.configs import PORTALS
 
 log = logging.getLogger("orchestrator")
@@ -30,19 +33,60 @@ def _make_agent(portal_id: str, session: BrowserSession, scope: str = "active"):
     from agents.cppp      import CPPPAgent
     from agents.generic   import GenericAgent
     from agents.karnataka import KarnatakaAgent
+    from agents.kppp      import KPPPAgent
+    from agents.aggregator import get_aggregator_agent
 
     cfg = PORTALS[portal_id]
 
+    # Archive/awards for GePNIC portals
     if scope != "active" and cfg.platform == "gepnic":
         from agents.gepnic_archive import GePNICArchiveAgent
         return GePNICArchiveAgent(cfg, session, scope=scope)
+
+    # Archive for CPPP
+    if scope != "active" and cfg.platform == "cppp":
+        try:
+            from agents.cppp_archive import CPPPArchiveAgent
+            return CPPPArchiveAgent(cfg, session, scope=scope)
+        except ImportError:
+            return CPPPAgent(cfg, session)
 
     if   cfg.platform == "gepnic":          return GePNICAgent(cfg, session)
     elif cfg.platform == "gem_api":         return GeMAgent(cfg, session)
     elif cfg.platform == "ireps":           return IREPSAgent(cfg, session)
     elif cfg.platform == "cppp":            return CPPPAgent(cfg, session)
     elif cfg.platform == "karnataka_seam":  return KarnatakaAgent(cfg, session)
-    else:                                   return GenericAgent(cfg, session)
+    elif cfg.platform == "karnataka_kppp":  return KPPPAgent(cfg, session)
+    elif cfg.platform == "karnataka_eproc":
+        try:
+            from agents.karnataka_eproc import KarnatakaEprocAgent
+            return KarnatakaEprocAgent(cfg, session)
+        except ImportError:
+            return GenericAgent(cfg, session)
+    elif cfg.platform == "aggregator":
+        agent = get_aggregator_agent(portal_id, session)
+        if agent:
+            return agent
+        return GenericAgent(cfg, session)
+    elif cfg.platform in ("tender247", "tendertiger", "bidassist"):
+        # Try dedicated agents from vansh branch
+        try:
+            if cfg.platform == "tender247":
+                from agents.tender247 import Tender247Agent
+                return Tender247Agent(cfg, session)
+            elif cfg.platform == "tendertiger":
+                from agents.tendertiger import TenderTigerAgent
+                return TenderTigerAgent(cfg, session)
+        except ImportError:
+            pass
+        return GenericAgent(cfg, session)
+    else:
+        # Universal fallback
+        try:
+            from agents.universal import UniversalAgent
+            return UniversalAgent(cfg, session)
+        except ImportError:
+            return GenericAgent(cfg, session)
 
 
 class ScrapeTask:
@@ -102,14 +146,33 @@ class ScrapeTask:
 
         if all_tenders:
             from pathlib import Path
+            from datetime import date as _date
             from core.storage import OUTPUT_DIR, save_awards_csv
+            from ai.classifier import classify_tender_local
             OUTPUT_DIR.mkdir(exist_ok=True)
+            today = _date.today().isoformat()
             snapshot = SnapshotStore()
             for pid, res in self.results.items():
                 if res.tenders:
+                    cfg = PORTALS.get(pid)
+                    for t in res.tenders:
+                        # Stamp metadata
+                        t.setdefault("scrape_date", today)
+                        t.setdefault("source_portal_type", cfg.platform if cfg else "")
+                        # Classify using combined text
+                        text = " ".join(
+                            filter(None, [
+                                t.get("title", ""),
+                                t.get("organisation", ""),
+                                t.get("work_description", ""),
+                            ])
+                        )
+                        if text.strip():
+                            t.setdefault("category", classify_tender_local(text))
                     save_csv(res.tenders, pid)
                     save_json(res.tenders, pid)
                     save_sqlite(res.tenders)
+                    save_daily_snapshot(res.tenders, pid)
                     snapshot.save(pid, res.tenders)
             save_combined_csv(all_tenders)
             save_awards_csv(all_tenders)
@@ -134,13 +197,18 @@ class ScrapeTask:
                     "count":     count,
                 })
 
+            scrape_kwargs = dict(
+                max_pages=max_pages,
+                org_filter=org_filter,
+                fetch_details=fetch_details,
+                progress_cb=progress_cb,
+            )
+            # KPPP agent supports a scope parameter for active/archive filtering
+            if cfg.platform == "karnataka_kppp":
+                scrape_kwargs["scope"] = scope
+
             try:
-                result = await agent.scrape(
-                    max_pages=max_pages,
-                    org_filter=org_filter,
-                    fetch_details=fetch_details,
-                    progress_cb=progress_cb,
-                )
+                result = await agent.scrape(**scrape_kwargs)
             except Exception as e:
                 log.error(f"[orch] {portal_id} crashed: {e}")
                 result = ScrapeResult(portal_id=portal_id, errors=[str(e)])

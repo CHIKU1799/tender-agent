@@ -190,7 +190,7 @@ PORTALS: dict[str, PortalConfig] = {
     # STATE PORTALS
     # ─────────────────────────────────────────────────────────────────────────
 
-    # ── Karnataka ────────────────────────────────────────────────────────────
+    # ── Karnataka (JSF/Seam) ─────────────────────────────────────────────────
     "karnataka": PortalConfig(
         portal_id    = "karnataka",
         display_name = "Karnataka e-Procurement",
@@ -201,6 +201,19 @@ PORTALS: dict[str, PortalConfig] = {
         results_url  = "https://eproc.karnataka.gov.in/eprocurement/common/eproc_tenders_list.seam",
         emoji        = "🌿",
         notes        = "JSF/Seam portal — form-based search with date range, no CAPTCHA",
+    ),
+
+    # ── Karnataka KPPP (Angular SPA) ─────────────────────────────────────────
+    "karnataka_kppp": PortalConfig(
+        portal_id    = "karnataka_kppp",
+        display_name = "Karnataka KPPP (Public Procurement Portal)",
+        base_url     = "https://kppp.karnataka.gov.in/#/portal/searchTender/live",
+        platform     = "karnataka_kppp",
+        category     = "State",
+        session_seed_url = "https://kppp.karnataka.gov.in/#/portal/searchTender/live",
+        results_url  = "https://kppp.karnataka.gov.in/#/portal/searchTender/live",
+        emoji        = "🌿",
+        notes        = "Angular Material SPA — 3 tabs (Goods/Works/Services), Kannada UI, no CAPTCHA. Clicks into each tender detail page for full data.",
     ),
 
     # ── Maharashtra ───────────────────────────────────────────────────────────
@@ -275,6 +288,121 @@ PORTALS: dict[str, PortalConfig] = {
         emoji        = "🏜️",
     ),
 
+    # ── Delhi ─────────────────────────────────────────────────────────────────
+    "delhi": PortalConfig(
+        portal_id    = "delhi",
+        display_name = "Delhi Govt Procurement",
+        base_url     = "https://govtprocurement.delhi.gov.in/nicgep/app",
+        platform     = "gepnic",
+        category     = "State",
+        session_seed_url = "https://govtprocurement.delhi.gov.in/nicgep/app?page=FrontEndLatestActiveTenders&service=page",
+        results_url  = "https://govtprocurement.delhi.gov.in/nicgep/app?component=%24DirectLink&page=FrontEndAdvancedSearchResult&service=direct",
+        archive_url  = "https://govtprocurement.delhi.gov.in/nicgep/app?page=FrontEndTendersInArchive&service=page",
+        awards_url   = "https://govtprocurement.delhi.gov.in/nicgep/app?page=FrontEndResultOfTenders&service=page",
+        emoji        = "🏙️",
+        notes        = "Delhi state GePNIC portal",
+    ),
+
+    # ── Madhya Pradesh ───────────────────────────────────────────────────────
+    "mp": PortalConfig(
+        portal_id    = "mp",
+        display_name = "Madhya Pradesh e-Procurement",
+        base_url     = "https://mptenders.gov.in/nicgep/app",
+        platform     = "gepnic",
+        category     = "State",
+        session_seed_url = "https://mptenders.gov.in/nicgep/app?page=FrontEndLatestActiveTenders&service=page",
+        results_url  = "https://mptenders.gov.in/nicgep/app?component=%24DirectLink&page=FrontEndAdvancedSearchResult&service=direct",
+        archive_url  = "https://mptenders.gov.in/nicgep/app?page=FrontEndTendersInArchive&service=page",
+        awards_url   = "https://mptenders.gov.in/nicgep/app?page=FrontEndResultOfTenders&service=page",
+        emoji        = "🐅",
+        notes        = "MP state GePNIC portal",
+    ),
+
+    # ── Uttarakhand ──────────────────────────────────────────────────────────
+    "uttarakhand": PortalConfig(
+        portal_id    = "uttarakhand",
+        display_name = "Uttarakhand e-Procurement",
+        base_url     = "https://uktenders.gov.in/nicgep/app",
+        platform     = "gepnic",
+        category     = "State",
+        session_seed_url = "https://uktenders.gov.in/nicgep/app?page=FrontEndLatestActiveTenders&service=page",
+        results_url  = "https://uktenders.gov.in/nicgep/app?component=%24DirectLink&page=FrontEndAdvancedSearchResult&service=direct",
+        archive_url  = "https://uktenders.gov.in/nicgep/app?page=FrontEndTendersInArchive&service=page",
+        awards_url   = "https://uktenders.gov.in/nicgep/app?page=FrontEndResultOfTenders&service=page",
+        emoji        = "🏔️",
+        notes        = "Uttarakhand state GePNIC portal",
+    ),
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # AGGREGATOR PORTALS (third-party tender aggregation sites)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    "tenderdetail": PortalConfig(
+        portal_id    = "tenderdetail",
+        display_name = "TenderDetail.com",
+        base_url     = "https://www.tenderdetail.com",
+        platform     = "aggregator",
+        category     = "Aggregator",
+        results_url  = "https://www.tenderdetail.com/Indian-Tenders",
+        emoji        = "🔍",
+        notes        = "Commercial tender aggregator — scrapes multiple govt portals",
+    ),
+
+    "tendertiger": PortalConfig(
+        portal_id    = "tendertiger",
+        display_name = "TenderTiger.com",
+        base_url     = "https://www.tendertiger.com",
+        platform     = "aggregator",
+        category     = "Aggregator",
+        results_url  = "https://www.tendertiger.com/tenders",
+        emoji        = "🐯",
+        notes        = "Login-required aggregator — needs credentials for scraping",
+    ),
+
+    "tenderkart": PortalConfig(
+        portal_id    = "tenderkart",
+        display_name = "TenderKart.in",
+        base_url     = "https://www.tenderkart.in",
+        platform     = "aggregator",
+        category     = "Aggregator",
+        results_url  = "https://www.tenderkart.in",
+        emoji        = "🛒",
+        notes        = "Login-required aggregator — needs credentials for scraping",
+    ),
+
+    "tender247": PortalConfig(
+        portal_id    = "tender247",
+        display_name = "Tender247.com",
+        base_url     = "https://tender247.com",
+        platform     = "aggregator",
+        category     = "Aggregator",
+        results_url  = "https://tender247.com",
+        emoji        = "⏰",
+        notes        = "Login-required aggregator — needs credentials for scraping",
+    ),
+
+    "gujarattenders": PortalConfig(
+        portal_id    = "gujarattenders",
+        display_name = "GujaratTenders.in",
+        base_url     = "https://gujarattenders.in",
+        platform     = "aggregator",
+        category     = "Aggregator",
+        results_url  = "https://gujarattenders.in",
+        emoji        = "💛",
+        notes        = "SSL certificate error — site may be down or moved",
+    ),
+
+    "palladium": PortalConfig(
+        portal_id    = "palladium",
+        display_name = "Palladium (PrimeNumbers)",
+        base_url     = "https://app.palladium.primenumbers.in",
+        platform     = "aggregator",
+        category     = "Aggregator",
+        results_url  = "https://app.palladium.primenumbers.in",
+        emoji        = "💎",
+        notes        = "SPA navigation issues — needs special handling",
+    ),
+
     # ─────────────────────────────────────────────────────────────────────────
     # INFO / SCHEME PORTALS (tender notices on ministry websites)
     # ─────────────────────────────────────────────────────────────────────────
@@ -313,6 +441,23 @@ PORTALS: dict[str, PortalConfig] = {
     ),
 }
 
+# ── Merge extra portals from vansh branch (skip duplicates) ──────────────────
+try:
+    from portals.extra_portals import EXTRA_PORTALS
+    for pid, cfg in EXTRA_PORTALS.items():
+        if pid not in PORTALS:
+            PORTALS[pid] = cfg
+except ImportError:
+    pass
+
+try:
+    from portals.new_portals import NEW_PORTALS
+    for pid, cfg in NEW_PORTALS.items():
+        if pid not in PORTALS:
+            PORTALS[pid] = cfg
+except ImportError:
+    pass
+
 # ── Grouped views ─────────────────────────────────────────────────────────────
 
 def by_category(category: str) -> dict[str, PortalConfig]:
@@ -321,6 +466,7 @@ def by_category(category: str) -> dict[str, PortalConfig]:
 def by_platform(platform: str) -> dict[str, PortalConfig]:
     return {pid: cfg for pid, cfg in PORTALS.items() if cfg.platform == platform}
 
-GEPNIC_PORTALS   = by_platform("gepnic")
-API_PORTALS      = by_platform("gem_api")
-GENERIC_PORTALS  = by_platform("generic")
+GEPNIC_PORTALS      = by_platform("gepnic")
+API_PORTALS         = by_platform("gem_api")
+GENERIC_PORTALS     = by_platform("generic")
+AGGREGATOR_PORTALS  = by_platform("aggregator")

@@ -42,16 +42,18 @@ BANNER = """
 # ─── Portal selection ─────────────────────────────────────────────────────────
 
 CATEGORY_LABELS = {
-    "Central": "🏛️  Central Government",
-    "PSU":     "🏭  Public Sector Undertakings",
-    "State":   "🗺️  State Portals",
-    "Info":    "ℹ️   Ministry Info Portals",
+    "Central":    "🏛️  Central Government",
+    "PSU":        "🏭  Public Sector Undertakings",
+    "State":      "🗺️  State Portals",
+    "Aggregator": "🔍  Tender Aggregators",
+    "Info":       "ℹ️   Ministry Info Portals",
 }
 
 QUICK_PRESETS = {
     "All Central Govt":    [pid for pid, p in PORTALS.items() if p.category == "Central"],
     "All State Portals":   [pid for pid, p in PORTALS.items() if p.category == "State"],
     "All PSUs":            [pid for pid, p in PORTALS.items() if p.category == "PSU"],
+    "All Aggregators":     [pid for pid, p in PORTALS.items() if p.category == "Aggregator"],
     "GePNIC only":         [pid for pid, p in PORTALS.items() if p.platform == "gepnic"],
     "Everything":          list(PORTALS.keys()),
     "Custom selection...": [],

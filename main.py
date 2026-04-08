@@ -5,10 +5,15 @@ Entry point: python main.py
 from __future__ import annotations
 import asyncio
 import logging
+import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
+from dotenv import load_dotenv
 from rich.live import Live
+
+load_dotenv()  # Load .env for OPENAI_API_KEY etc.
 
 from portals.configs import PORTALS
 from agents.gepnic    import GePNICAgent
@@ -17,6 +22,7 @@ from agents.ireps     import IREPSAgent
 from agents.generic   import GenericAgent
 from agents.cppp      import CPPPAgent
 from agents.karnataka import KarnatakaAgent
+from agents.kppp      import KPPPAgent
 from agents.base    import ScrapeResult
 from core.browser   import BrowserSession
 from core.storage   import (
@@ -28,6 +34,25 @@ from interface.cli  import (
     select_portals, configure_filters, confirm_start,
     show_results_summary, show_new_tenders_detail,
 )
+
+# Lazy imports for optional components
+def _get_aggregator_agent(portal_id, session):
+    from agents.aggregator import get_aggregator_agent
+    return get_aggregator_agent(portal_id, session)
+
+def _get_classifier():
+    try:
+        from ai.classifier import classify_tenders_batch, classify_tender_local
+        return classify_tenders_batch, classify_tender_local
+    except ImportError:
+        return None, None
+
+def _get_daily_snapshot():
+    try:
+        from core.storage import save_daily_snapshot
+        return save_daily_snapshot
+    except ImportError:
+        return None
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 Path("logs").mkdir(exist_ok=True)
@@ -49,6 +74,12 @@ def make_agent(portal_id: str, session: BrowserSession):
     elif cfg.platform == "ireps":           return IREPSAgent(cfg, session)
     elif cfg.platform == "cppp":            return CPPPAgent(cfg, session)
     elif cfg.platform == "karnataka_seam":  return KarnatakaAgent(cfg, session)
+    elif cfg.platform == "karnataka_kppp":  return KPPPAgent(cfg, session)
+    elif cfg.platform == "aggregator":
+        agent = _get_aggregator_agent(portal_id, session)
+        if agent:
+            return agent
+        return GenericAgent(cfg, session)
     else:                                   return GenericAgent(cfg, session)
 
 
@@ -155,6 +186,16 @@ def save_all(
             awarded_count = len([t for t in all_tenders if t.get("award_winner") or t.get("award_date")])
             log.info(f"Awards CSV: {awards_path} ({awarded_count} awarded tenders)")
 
+    # Daily snapshot for history tracking
+    save_daily = _get_daily_snapshot()
+    if save_daily:
+        for portal_id, result in all_results.items():
+            if result.tenders:
+                try:
+                    save_daily(result.tenders, portal_id)
+                except Exception as e:
+                    log.warning(f"Daily snapshot failed for {portal_id}: {e}")
+
     write_run_log(log_entries)
     return new_counts, all_new
 
@@ -194,10 +235,45 @@ async def main():
     with Live(progress, console=console, refresh_per_second=4):
         all_results = await run_portals(portal_ids, filters, progress, task_map)
 
-    # Step 6: Save + diff
+    # Step 6: AI Classification (if API key available)
+    classify_batch, classify_local = _get_classifier()
+    if classify_batch or classify_local:
+        console.print("\n[bold yellow]Step 6 — Classifying tenders by industry...[/bold yellow]")
+        for portal_id, result in all_results.items():
+            if not result.tenders:
+                continue
+            # Use local (free) classifier first
+            if classify_local:
+                for t in result.tenders:
+                    if not t.get("industry_category"):
+                        t["industry_category"] = classify_local(
+                            " ".join(filter(None, [
+                                t.get("title", ""),
+                                t.get("organisation", ""),
+                                t.get("work_description", ""),
+                            ]))
+                        )
+            # Optionally use AI for unclassified ones
+            if classify_batch and os.getenv("OPENAI_API_KEY"):
+                unclassified = [t for t in result.tenders if t.get("industry_category") == "Other" or not t.get("industry_category")]
+                if unclassified:
+                    try:
+                        classified = asyncio.get_event_loop().run_until_complete(classify_batch(unclassified))
+                        # Merge back
+                        id_map = {t.get("tender_id"): t for t in classified}
+                        for t in result.tenders:
+                            updated = id_map.get(t.get("tender_id"))
+                            if updated and updated.get("industry_category"):
+                                t["industry_category"] = updated["industry_category"]
+                                t["sub_category"] = updated.get("sub_category", "")
+                        console.print(f"  [green]✓[/green] {portal_id}: classified {len(classified)} tenders")
+                    except Exception as e:
+                        log.warning(f"AI classification failed for {portal_id}: {e}")
+
+    # Step 7: Save + diff
     new_counts, new_tenders = save_all(all_results, filters)
 
-    # Step 7: Display summary
+    # Step 8: Display summary
     show_results_summary(all_results, new_counts, OUTPUT_DIR)
     if new_tenders:
         show_new_tenders_detail(new_tenders)
